@@ -12,6 +12,19 @@ import {
   Calendar,
   AlertTriangle
 } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
+} from 'recharts';
 
 interface SalesStats {
   totalSales: number;
@@ -27,6 +40,8 @@ interface TopProduct {
   revenue: number;
 }
 
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+
 export default function ReportesPage() {
   const [dateRange, setDateRange] = useState<'7' | '30' | '90' | 'all'>('30');
   const [stats, setStats] = useState<SalesStats>({
@@ -37,7 +52,7 @@ export default function ReportesPage() {
   });
   const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
-  const [salesByDay, setSalesByDay] = useState<{ date: string; amount: number }[]>([]);
+  const [salesByDay, setSalesByDay] = useState<{ date: string; amount: number; isToday?: boolean }[]>([]);
   const [todaySales, setTodaySales] = useState<{ amount: number; transactions: number }>({ amount: 0, transactions: 0 });
 
   const sales = useLiveQuery(() => db.sales.toArray(), []);
@@ -130,7 +145,7 @@ export default function ReportesPage() {
       ? Math.min(90, Math.ceil((now.getTime() - Math.min(...sales.map(s => new Date(s.date).getTime()))) / (1000 * 60 * 60 * 24)))
       : parseInt(dateRange);
     
-    const salesByDayData: { date: string; amount: number }[] = [];
+    const salesByDayData: { date: string; amount: number; isToday?: boolean }[] = [];
     
     // Generate array of dates from start to end
     for (let i = daysToShow - 1; i >= 0; i--) {
@@ -146,7 +161,8 @@ export default function ReportesPage() {
       });
       
       const dayTotal = daySales.reduce((sum, sale) => sum + sale.totalAmountUsd, 0);
-      salesByDayData.push({ date: dateStr, amount: dayTotal });
+      const isToday = i === 0;
+      salesByDayData.push({ date: dateStr, amount: dayTotal, isToday });
     }
     setSalesByDay(salesByDayData);
 
@@ -166,6 +182,47 @@ export default function ReportesPage() {
       return date.toLocaleDateString('es-VE', { month: 'short', day: 'numeric' });
     }
     return date.toLocaleDateString('es-VE', { weekday: 'short', day: 'numeric' });
+  };
+
+  const formatShortCurrency = (value: number) => {
+    if (value >= 1000) {
+      return `$${(value / 1000).toFixed(0)}k`;
+    }
+    return `$${value}`;
+  };
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-gray-800 text-white text-xs px-3 py-2 rounded shadow-lg">
+          <p className="font-semibold mb-1">
+            {data.isToday ? 'Hoy' : new Date(label).toLocaleDateString('es-VE', { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })}
+          </p>
+          <p>{formatCurrency(data.amount)}</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const PieTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0];
+      return (
+        <div className="bg-gray-800 text-white text-xs px-3 py-2 rounded shadow-lg">
+          <p className="font-semibold mb-1">{data.name}</p>
+          <p>{formatCurrency(data.value)}</p>
+          <p className="text-gray-300">{data.payload.quantitySold} unidades</p>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -239,57 +296,43 @@ export default function ReportesPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Sales Chart */}
+        {/* Sales Chart - Recharts BarChart */}
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-lg font-semibold mb-4">
             {dateRange === 'all' ? 'Ventas Históricas' : dateRange === '7' ? 'Ventas Últimos 7 Días (incluye hoy)' : `Ventas Últimos ${dateRange} Días`}
           </h2>
-          <div className="h-64 flex items-end justify-between gap-1">
-            {salesByDay.map((day, index) => {
-              const maxAmount = Math.max(...salesByDay.map(d => d.amount), 1);
-              const height = maxAmount > 0 ? (day.amount / maxAmount) * 100 : 0;
-              
-              // Check if this is today's column (last one)
-              const isToday = index === salesByDay.length - 1;
-              
-              // Determine label frequency based on number of days
-              const totalDays = salesByDay.length;
-              let showLabel = true;
-              
-              if (totalDays > 60) {
-                // For 90 days, show every 5th label
-                showLabel = index % 5 === 0 || index === totalDays - 1;
-              } else if (totalDays > 30) {
-                // For 60 days, show every 3rd label
-                showLabel = index % 3 === 0 || index === totalDays - 1;
-              } else if (totalDays > 14) {
-                // For 30 days, show every 2nd label
-                showLabel = index % 2 === 0 || index === totalDays - 1;
-              }
-              
-              return (
-                <div key={index} className="flex-1 flex flex-col items-center gap-2 min-w-0">
-                  <div className="w-full relative">
-                    <div 
-                      className={`w-full rounded-t transition-all duration-500 ${
-                        isToday 
-                          ? 'bg-green-500 hover:bg-green-600 ring-2 ring-green-400' 
-                          : 'bg-blue-500 hover:bg-blue-600'
-                      }`}
-                      style={{ height: `${Math.max(height, 4)}%`, minHeight: '4px' }}
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={salesByDay} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={formatDate}
+                  stroke="#6b7280"
+                  fontSize={12}
+                  interval="preserveStartEnd"
+                  minTickGap={30}
+                />
+                <YAxis 
+                  tickFormatter={formatShortCurrency}
+                  stroke="#6b7280"
+                  fontSize={12}
+                />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }} />
+                <Bar 
+                  dataKey="amount" 
+                  radius={[4, 4, 0, 0]}
+                  fill="#3b82f6"
+                >
+                  {salesByDay.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.isToday ? '#10b981' : '#3b82f6'}
                     />
-                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                      {formatCurrency(day.amount)}
-                    </div>
-                  </div>
-                  {showLabel && (
-                    <span className={`text-xs truncate max-w-full ${isToday ? 'text-green-600 font-bold' : 'text-gray-600'}`}>
-                      {isToday ? 'Hoy' : formatDate(day.date)}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
           
           {/* Today's Sales Summary */}
@@ -307,28 +350,57 @@ export default function ReportesPage() {
           </div>
         </div>
 
-        {/* Top Products */}
+        {/* Top Products - Recharts PieChart */}
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-lg font-semibold mb-4">Top 5 Productos Más Vendidos</h2>
           {topProducts.length > 0 ? (
-            <div className="space-y-3">
-              {topProducts.map((product, index) => (
-                <div key={product.sku} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold">
-                      {index + 1}
-                    </span>
-                    <div>
-                      <p className="font-medium text-gray-900">{product.name}</p>
-                      <p className="text-sm text-gray-500">{product.quantitySold} unidades</p>
-                    </div>
-                  </div>
-                  <p className="font-semibold text-gray-900">{formatCurrency(product.revenue)}</p>
-                </div>
-              ))}
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={topProducts}
+                    dataKey="revenue"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={({ name, percent }) => percent ? `${(percent * 100).toFixed(0)}%` : ''}
+                    labelLine={false}
+                  >
+                    {topProducts.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<PieTooltip />} />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={36}
+                    iconType="circle"
+                    formatter={(value: string) => value.length > 20 ? value.substring(0, 20) + '...' : value}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
           ) : (
             <p className="text-gray-500 text-center py-8">No hay datos de ventas disponibles.</p>
+          )}
+          
+          {/* Top Products List */}
+          {topProducts.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {topProducts.map((product, index) => (
+                <div key={product.sku} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    />
+                    <span className="text-gray-700">{product.name}</span>
+                  </div>
+                  <span className="font-semibold text-gray-900">{formatCurrency(product.revenue)}</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
