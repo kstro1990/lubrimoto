@@ -72,8 +72,14 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
     try {
       const newSKU = await generateSKU();
       setFormData(prev => ({ ...prev, sku: newSKU }));
+      // Clear any previous SKU error since we generated a new valid one
+      setErrors(prev => ({ ...prev, sku: '' }));
     } catch (error) {
       console.error('Error generating SKU:', error);
+      setErrors(prev => ({ 
+        ...prev, 
+        sku: 'Error al generar SKU. Por favor inténtalo de nuevo o ingresa uno manualmente.' 
+      }));
     } finally {
       setIsGeneratingSKU(false);
     }
@@ -138,12 +144,17 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
       }
     });
 
+    // Additional check: SKU must not be empty
+    if (!formData.sku || formData.sku.trim() === '') {
+      newErrors.sku = 'El SKU es requerido. Haz clic en "Generar" para crear uno automáticamente.';
+    }
+
     // Check if SKU is unique (only for new products or if SKU changed)
-    if (mode === 'create' || (product && formData.sku !== product.sku)) {
+    if (!newErrors.sku && (mode === 'create' || (product && formData.sku !== product.sku))) {
       try {
         const existing = await db.products.where('sku').equals(formData.sku || '').first();
         if (existing) {
-          newErrors.sku = 'Este SKU ya existe';
+          newErrors.sku = 'Este SKU ya existe. Por favor genera uno nuevo o usa uno diferente.';
         }
       } catch (error) {
         console.error('Error checking SKU uniqueness:', error);
@@ -189,7 +200,12 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
     // Wait for validation (including async SKU check)
     const isValid = await validateForm();
     if (!isValid) {
-      console.log('Form validation failed:', errors);
+      // Focus on the first field with error
+      const firstErrorField = Object.keys(errors).find(key => errors[key]);
+      if (firstErrorField) {
+        const element = document.getElementById(firstErrorField);
+        element?.focus();
+      }
       return;
     }
 
@@ -216,7 +232,10 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
       id: mode === 'edit' ? product!.id : undefined,
     } as Product;
 
-    console.log('Submitting product:', productData);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Submitting product:', productData);
+    }
+    
     onSubmit(productData);
   };
 

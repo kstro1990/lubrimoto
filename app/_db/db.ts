@@ -122,8 +122,21 @@ export class LubriMotosDB extends Dexie {
   constructor() {
     super('lubrimotos-erp-db');
     
+    // Version 4 - Original schema
     this.version(4).stores({
       products: '++id, sku, name, category, barcode, syncStatus, updatedAt, lastSyncAt',
+      customers: '++id, name, syncStatus, updatedAt, lastSyncAt',
+      sales: '++id, date, syncStatus, updatedAt, lastSyncAt',
+      saleItems: '++id, saleId, productId, syncStatus, lastSyncAt',
+      payments: '++id, saleId, syncStatus, lastSyncAt',
+      exchangeRates: '++id, recordedAt',
+      inventoryMovements: '++id, productId, type, createdAt',
+      syncQueue: '++id, tableName, createdAt',
+    });
+    
+    // Version 5 - Add createdAt index for products (needed for SKU generation)
+    this.version(5).stores({
+      products: '++id, sku, name, category, barcode, syncStatus, updatedAt, lastSyncAt, createdAt',
       customers: '++id, name, syncStatus, updatedAt, lastSyncAt',
       sales: '++id, date, syncStatus, updatedAt, lastSyncAt',
       saleItems: '++id, saleId, productId, syncStatus, lastSyncAt',

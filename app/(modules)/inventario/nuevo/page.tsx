@@ -4,7 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus } from 'lucide-react';
 import ProductForm from '../components/ProductForm';
-import { Product, db, SyncStatus, recordInventoryMovement, MovementType } from '@/app/_db/db';
+import { Product, db, SyncStatus, MovementType } from '@/app/_db/db';
 import { useNotifications } from '@/app/_components/NotificationProvider';
 import Link from 'next/link';
 
@@ -13,47 +13,80 @@ export default function NewProductPage() {
   const { success, error: showError } = useNotifications();
 
   const handleSubmit = async (productData: Product) => {
-    console.log('handleSubmit called with:', productData);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('handleSubmit called with:', productData);
+    }
     
     try {
-      // Double-check if SKU already exists (safety check)
-      console.log('Checking if SKU exists:', productData.sku);
-      const existing = await db.products.where('sku').equals(productData.sku).first();
-      
-      if (existing) {
-        console.log('SKU already exists:', existing);
-        showError('Error', `El SKU "${productData.sku}" ya existe. Por favor usa otro.`, 5000);
-        return;
-      }
+      // Use transaction to ensure atomicity: either both product and movement are saved, or neither
+      const result = await db.transaction('rw', db.products, db.inventoryMovements, async () => {
+        // Check if SKU already exists
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Checking if SKU exists:', productData.sku);
+        }
+        
+        const existing = await db.products.where('sku').equals(productData.sku).first();
+        
+        if (existing) {
+          throw new Error(`El SKU "${productData.sku}" ya existe. Por favor usa otro.`);
+        }
 
-      console.log('SKU is unique, proceeding to add product...');
-      
-      // Add product - Ensure all required fields are present
-      const productToAdd = {
-        ...productData,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      
-      console.log('Adding product to database:', productToAdd);
-      const id = await db.products.add(productToAdd);
-      console.log('Product added successfully with ID:', id);
-      
-      // Verify product was added
-      const addedProduct = await db.products.get(id);
-      console.log('Verified product in database:', addedProduct);
-      
-      // Record initial stock movement
-      console.log('Recording inventory movement...');
-      await recordInventoryMovement(
-        { ...productToAdd, id },
-        MovementType.INITIAL,
-        productData.stockQuantity,
-        undefined,
-        'Producto creado',
-        'Usuario'
-      );
-      console.log('Inventory movement recorded');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('SKU is unique, proceeding to add product...');
+        }
+        
+        // Add product - Ensure all required fields are present
+        const productToAdd = {
+          ...productData,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Adding product to database:', productToAdd);
+        }
+        
+        const id = await db.products.add(productToAdd);
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Product added successfully with ID:', id);
+        }
+        
+        // Verify product was added
+        const addedProduct = await db.products.get(id);
+        
+        if (!addedProduct) {
+          throw new Error('El producto no se pudo guardar correctamente.');
+        }
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Verified product in database:', addedProduct);
+        }
+        
+        // Record initial stock movement (within same transaction)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Recording inventory movement...');
+        }
+        
+        await db.inventoryMovements.add({
+          productId: id,
+          productSku: productToAdd.sku,
+          productName: productToAdd.name,
+          type: MovementType.INITIAL,
+          quantity: productData.stockQuantity,
+          previousStock: 0,
+          newStock: productData.stockQuantity,
+          notes: 'Producto creado',
+          createdBy: 'Usuario',
+          createdAt: new Date(),
+        });
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Inventory movement recorded');
+        }
+        
+        return { id, product: addedProduct };
+      });
 
       success(
         'Producto Creado',
@@ -63,13 +96,18 @@ export default function NewProductPage() {
 
       router.push('/inventario');
     } catch (err: any) {
-      console.error('Error creating product:', err);
-      console.error('Error details:', {
-        message: err.message,
-        stack: err.stack,
-        productData: productData
-      });
-      showError('Error', `No se pudo crear el producto: ${err.message || 'Error desconocido'}`, 5000);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error creating product:', err);
+        console.error('Error details:', {
+          message: err.message,
+          stack: err.stack,
+          productData: productData
+        });
+      }
+      
+      // Show user-friendly error message
+      const errorMessage = err.message || 'Error desconocido al crear el producto';
+      showError('Error', `No se pudo crear el producto: ${errorMessage}`, 5000);
     }
   };
 
