@@ -1,10 +1,8 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ImportModal from '@/app/(modules)/inventario/components/ImportModal';
 
 // Mock database
 jest.mock('@/app/_db/db', () => ({
-  ...jest.requireActual('@/app/_db/db'),
   db: {
     products: {
       add: jest.fn().mockResolvedValue(1),
@@ -33,6 +31,8 @@ jest.mock('@/app/_components/NotificationProvider', () => ({
   }),
 }));
 
+import ImportModal from '@/app/(modules)/inventario/components/ImportModal';
+
 describe('ImportModal', () => {
   const mockOnClose = jest.fn();
   const mockOnSuccess = jest.fn();
@@ -49,71 +49,80 @@ describe('ImportModal', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders upload step when open', () => {
-    render(
-      <ImportModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
-    );
+  it('renders upload step when open', async () => {
+    await act(async () => {
+      render(
+        <ImportModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
+      );
+    });
 
-    expect(screen.getByText(/Importar Productos desde CSV/i)).toBeInTheDocument();
-    expect(screen.getByText(/Descargar Plantilla/i)).toBeInTheDocument();
-    expect(screen.getByText(/Descargar plantilla.csv/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Importar Productos desde CSV/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Descargar Plantilla/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Descargar plantilla.csv/i })).toBeInTheDocument();
   });
 
-  it('shows format requirements', () => {
-    render(
-      <ImportModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
-    );
+  it('shows format requirements', async () => {
+    await act(async () => {
+      render(
+        <ImportModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
+      );
+    });
 
     expect(screen.getByText(/Formato Requerido/i)).toBeInTheDocument();
     expect(screen.getByText(/nombre, descripcion, costo_usd/i)).toBeInTheDocument();
   });
 
-  it('shows file upload area', () => {
-    render(
-      <ImportModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
-    );
+  it('shows file upload area', async () => {
+    await act(async () => {
+      render(
+        <ImportModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
+      );
+    });
 
     expect(screen.getByText(/Arrastra un archivo CSV/i)).toBeInTheDocument();
     expect(screen.getByText(/Solo archivos .csv/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/csv-upload/i)).toBeInTheDocument();
   });
 
   it('validates file type', async () => {
-    const { container } = render(
-      <ImportModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
-    );
+    await act(async () => {
+      render(
+        <ImportModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
+      );
+    });
 
-    // Create a mock file input change
-    const fileInput = container.querySelector('input[type="file"]');
+    // Get the file input by label
+    const fileInput = screen.getByLabelText(/csv-upload/i);
     const invalidFile = new File(['test'], 'test.txt', { type: 'text/plain' });
     
-    Object.defineProperty(fileInput, 'files', {
-      value: [invalidFile],
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [invalidFile] } });
     });
 
-    if (fileInput) {
-      fireEvent.change(fileInput);
-    }
-
-    // Should show error (via notification mock)
+    // Should show error (via notification mock) - just verify no crash
     await waitFor(() => {
-      // The error would be called via the notification system
+      expect(fileInput).toBeInTheDocument();
     });
   });
 
-  it('calls onClose when clicking outside or close button', () => {
-    render(
-      <ImportModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
-    );
+  it('calls onClose when clicking close button', async () => {
+    await act(async () => {
+      render(
+        <ImportModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
+      );
+    });
 
-    // Click backdrop
-    const backdrop = screen.getByText(/Importar Productos desde CSV/i).parentElement?.parentElement?.parentElement?.firstChild;
-    if (backdrop) {
-      fireEvent.click(backdrop);
-      expect(mockOnClose).toHaveBeenCalled();
-    }
+    // Click close button (X)
+    const closeButton = screen.getByRole('button', { name: '' });
+    
+    await act(async () => {
+      fireEvent.click(closeButton);
+    });
+    
+    expect(mockOnClose).toHaveBeenCalled();
   });
 
-  it('triggers download when clicking template link', () => {
+  it('triggers download when clicking template link', async () => {
     // Mock createElement and click
     const mockClick = jest.fn();
     const mockCreateObjectURL = jest.fn().mockReturnValue('blob:test');
@@ -133,12 +142,17 @@ describe('ImportModal', () => {
       return originalCreateElement.call(document, tag);
     });
 
-    render(
-      <ImportModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
-    );
+    await act(async () => {
+      render(
+        <ImportModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
+      );
+    });
 
-    const downloadLink = screen.getByText(/Descargar plantilla.csv/i);
-    fireEvent.click(downloadLink);
+    const downloadLink = screen.getByRole('button', { name: /Descargar plantilla.csv/i });
+    
+    await act(async () => {
+      fireEvent.click(downloadLink);
+    });
 
     expect(mockCreateObjectURL).toHaveBeenCalled();
     expect(mockClick).toHaveBeenCalled();

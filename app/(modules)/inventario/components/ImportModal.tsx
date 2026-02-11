@@ -269,6 +269,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
                     onChange={handleFileUpload}
                     className="hidden"
                     id="csv-upload"
+                    aria-label="csv-upload"
                   />
                   <label htmlFor="csv-upload" className="cursor-pointer">
                     <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />

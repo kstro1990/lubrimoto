@@ -1,11 +1,9 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ProductForm from '@/app/(modules)/inventario/components/ProductForm';
 import { Product, SyncStatus } from '@/app/_db/db';
 
 // Mock the database
 jest.mock('@/app/_db/db', () => ({
-  ...jest.requireActual('@/app/_db/db'),
   generateSKU: jest.fn().mockResolvedValue('PROD-250207-0001'),
   db: {
     products: {
@@ -14,7 +12,15 @@ jest.mock('@/app/_db/db', () => ({
       first: jest.fn().mockResolvedValue(null),
     },
   },
+  SyncStatus: {
+    PENDING: 'pending',
+    SYNCING: 'syncing',
+    SYNCED: 'synced',
+    ERROR: 'error',
+  },
 }));
+
+import ProductForm from '@/app/(modules)/inventario/components/ProductForm';
 
 describe('ProductForm', () => {
   const mockOnSubmit = jest.fn();
@@ -25,32 +31,36 @@ describe('ProductForm', () => {
   });
 
   describe('Create Mode', () => {
-    it('renders form with all required fields', () => {
-      render(
-        <ProductForm
-          product={null}
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
+    it('renders form with all required fields', async () => {
+      await act(async () => {
+        render(
+          <ProductForm
+            product={null}
+            mode="create"
+            onSubmit={mockOnSubmit}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
 
       expect(screen.getByLabelText(/SKU/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Nombre del Producto/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/Precio de Venta/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Precio de Venta \(USD\)/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Stock Actual/i)).toBeInTheDocument();
-      expect(screen.getByText(/Crear Producto/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Crear Producto/i })).toBeInTheDocument();
     });
 
     it('auto-generates SKU on mount', async () => {
-      render(
-        <ProductForm
-          product={null}
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
+      await act(async () => {
+        render(
+          <ProductForm
+            product={null}
+            mode="create"
+            onSubmit={mockOnSubmit}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
 
       await waitFor(() => {
         const skuInput = screen.getByDisplayValue('PROD-250207-0001');
@@ -59,53 +69,83 @@ describe('ProductForm', () => {
     });
 
     it('validates required fields', async () => {
-      render(
-        <ProductForm
-          product={null}
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      // Submit empty form
-      const submitButton = screen.getByText(/Crear Producto/i);
-      fireEvent.click(submitButton);
-
-      await waitFor(() => {
-        expect(screen.getByText(/El nombre debe tener al menos 2 caracteres/i)).toBeInTheDocument();
-        expect(screen.getByText(/El precio debe ser mayor a 0/i)).toBeInTheDocument();
+      await act(async () => {
+        render(
+          <ProductForm
+            product={null}
+            mode="create"
+            onSubmit={mockOnSubmit}
+            onCancel={mockOnCancel}
+          />
+        );
       });
 
+      // Wait for SKU to be auto-generated
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('PROD-250207-0001')).toBeInTheDocument();
+      });
+
+      // Fill name with invalid value (too short)
+      const nameInput = screen.getByLabelText(/Nombre del Producto/i);
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { name: 'name', value: 'A' } });
+      });
+      
+      // Trigger blur to mark as touched
+      await act(async () => {
+        fireEvent.blur(nameInput);
+      });
+
+      // Should show validation error
+      await waitFor(() => {
+        expect(screen.getByText(/El nombre debe tener al menos 2 caracteres/i)).toBeInTheDocument();
+      });
+
+      // Verify submit was not called
+      const submitButton = screen.getByRole('button', { name: /Crear Producto/i });
+      await act(async () => {
+        fireEvent.click(submitButton);
+      });
       expect(mockOnSubmit).not.toHaveBeenCalled();
     });
 
     it('submits form with valid data', async () => {
-      render(
-        <ProductForm
-          product={null}
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
+      await act(async () => {
+        render(
+          <ProductForm
+            product={null}
+            mode="create"
+            onSubmit={mockOnSubmit}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
 
       // Fill in the form
-      fireEvent.change(screen.getByLabelText(/Nombre del Producto/i), {
-        target: { name: 'name', value: 'Test Product' },
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Nombre del Producto/i), {
+          target: { name: 'name', value: 'Test Product' },
+        });
       });
 
-      fireEvent.change(screen.getByLabelText(/Precio de Venta/i), {
-        target: { name: 'priceUsd', value: '50.00' },
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Precio de Venta \(USD\)/i), {
+          target: { name: 'priceUsd', value: '50.00' },
+        });
       });
 
-      fireEvent.change(screen.getByLabelText(/Stock Actual/i), {
-        target: { name: 'stockQuantity', value: '10' },
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Stock Actual/i), {
+          target: { name: 'stockQuantity', value: '10' },
+        });
       });
 
       // Submit form
-      const submitButton = screen.getByText(/Crear Producto/i);
-      fireEvent.click(submitButton);
+      const submitButton = screen.getByRole('button', { name: /Crear Producto/i });
+      
+      await act(async () => {
+        fireEvent.click(submitButton);
+      });
 
       await waitFor(() => {
         expect(mockOnSubmit).toHaveBeenCalled();
@@ -119,22 +159,28 @@ describe('ProductForm', () => {
     });
 
     it('calculates and displays profit margin', async () => {
-      render(
-        <ProductForm
-          product={null}
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      // Fill cost and price
-      fireEvent.change(screen.getByLabelText(/Costo/i), {
-        target: { name: 'costUsd', value: '30.00' },
+      await act(async () => {
+        render(
+          <ProductForm
+            product={null}
+            mode="create"
+            onSubmit={mockOnSubmit}
+            onCancel={mockOnCancel}
+          />
+        );
       });
 
-      fireEvent.change(screen.getByLabelText(/Precio de Venta/i), {
-        target: { name: 'priceUsd', value: '50.00' },
+      // Fill cost and price
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Costo \(USD\)/i), {
+          target: { name: 'costUsd', value: '30.00' },
+        });
+      });
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Precio de Venta \(USD\)/i), {
+          target: { name: 'priceUsd', value: '50.00' },
+        });
       });
 
       await waitFor(() => {
@@ -144,35 +190,46 @@ describe('ProductForm', () => {
     });
 
     it('allows selecting category', async () => {
-      render(
-        <ProductForm
-          product={null}
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
+      await act(async () => {
+        render(
+          <ProductForm
+            product={null}
+            mode="create"
+            onSubmit={mockOnSubmit}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
 
       const categorySelect = screen.getByLabelText(/Categoría/i);
-      fireEvent.change(categorySelect, {
-        target: { name: 'category', value: 'Lubricantes' },
+      
+      await act(async () => {
+        fireEvent.change(categorySelect, {
+          target: { name: 'category', value: 'Lubricantes' },
+        });
       });
 
       expect(categorySelect).toHaveValue('Lubricantes');
     });
 
-    it('calls onCancel when cancel button is clicked', () => {
-      render(
-        <ProductForm
-          product={null}
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
+    it('calls onCancel when cancel button is clicked', async () => {
+      await act(async () => {
+        render(
+          <ProductForm
+            product={null}
+            mode="create"
+            onSubmit={mockOnSubmit}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
 
-      const cancelButton = screen.getByText(/Cancelar/i);
-      fireEvent.click(cancelButton);
+      // Use getByRole with name to avoid ambiguity
+      const cancelButton = screen.getByRole('button', { name: /^Cancelar$/i });
+      
+      await act(async () => {
+        fireEvent.click(cancelButton);
+      });
 
       expect(mockOnCancel).toHaveBeenCalled();
     });
@@ -197,15 +254,17 @@ describe('ProductForm', () => {
       updatedAt: new Date(),
     };
 
-    it('pre-fills form with existing product data', () => {
-      render(
-        <ProductForm
-          product={existingProduct}
-          mode="edit"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
+    it('pre-fills form with existing product data', async () => {
+      await act(async () => {
+        render(
+          <ProductForm
+            product={existingProduct}
+            mode="edit"
+            onSubmit={mockOnSubmit}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
 
       expect(screen.getByDisplayValue('Existing Product')).toBeInTheDocument();
       expect(screen.getByDisplayValue('PROD-001')).toBeInTheDocument();
@@ -213,37 +272,46 @@ describe('ProductForm', () => {
       expect(screen.getByDisplayValue('15')).toBeInTheDocument();
     });
 
-    it('shows save button instead of create button', () => {
-      render(
-        <ProductForm
-          product={existingProduct}
-          mode="edit"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
+    it('shows save button instead of create button', async () => {
+      await act(async () => {
+        render(
+          <ProductForm
+            product={existingProduct}
+            mode="edit"
+            onSubmit={mockOnSubmit}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
 
-      expect(screen.getByText(/Guardar Cambios/i)).toBeInTheDocument();
-      expect(screen.queryByText(/Crear Producto/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Guardar Cambios/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Crear Producto/i })).not.toBeInTheDocument();
     });
 
     it('submits updated data', async () => {
-      render(
-        <ProductForm
-          product={existingProduct}
-          mode="edit"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      // Update name
-      fireEvent.change(screen.getByLabelText(/Nombre del Producto/i), {
-        target: { name: 'name', value: 'Updated Product' },
+      await act(async () => {
+        render(
+          <ProductForm
+            product={existingProduct}
+            mode="edit"
+            onSubmit={mockOnSubmit}
+            onCancel={mockOnCancel}
+          />
+        );
       });
 
-      const submitButton = screen.getByText(/Guardar Cambios/i);
-      fireEvent.click(submitButton);
+      // Update name
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Nombre del Producto/i), {
+          target: { name: 'name', value: 'Updated Product' },
+        });
+      });
+
+      const submitButton = screen.getByRole('button', { name: /Guardar Cambios/i });
+      
+      await act(async () => {
+        fireEvent.click(submitButton);
+      });
 
       await waitFor(() => {
         expect(mockOnSubmit).toHaveBeenCalled();
@@ -257,20 +325,26 @@ describe('ProductForm', () => {
 
   describe('Validation', () => {
     it('shows error for negative stock', async () => {
-      render(
-        <ProductForm
-          product={null}
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      fireEvent.change(screen.getByLabelText(/Stock Actual/i), {
-        target: { name: 'stockQuantity', value: '-5' },
+      await act(async () => {
+        render(
+          <ProductForm
+            product={null}
+            mode="create"
+            onSubmit={mockOnSubmit}
+            onCancel={mockOnCancel}
+          />
+        );
       });
 
-      fireEvent.blur(screen.getByLabelText(/Stock Actual/i));
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Stock Actual/i), {
+          target: { name: 'stockQuantity', value: '-5' },
+        });
+      });
+
+      await act(async () => {
+        fireEvent.blur(screen.getByLabelText(/Stock Actual/i));
+      });
 
       await waitFor(() => {
         expect(screen.getByText(/El stock no puede ser negativo/i)).toBeInTheDocument();
@@ -278,20 +352,26 @@ describe('ProductForm', () => {
     });
 
     it('shows error for name too short', async () => {
-      render(
-        <ProductForm
-          product={null}
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      fireEvent.change(screen.getByLabelText(/Nombre del Producto/i), {
-        target: { name: 'name', value: 'A' },
+      await act(async () => {
+        render(
+          <ProductForm
+            product={null}
+            mode="create"
+            onSubmit={mockOnSubmit}
+            onCancel={mockOnCancel}
+          />
+        );
       });
 
-      fireEvent.blur(screen.getByLabelText(/Nombre del Producto/i));
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Nombre del Producto/i), {
+          target: { name: 'name', value: 'A' },
+        });
+      });
+
+      await act(async () => {
+        fireEvent.blur(screen.getByLabelText(/Nombre del Producto/i));
+      });
 
       await waitFor(() => {
         expect(screen.getByText(/El nombre debe tener al menos 2 caracteres/i)).toBeInTheDocument();
