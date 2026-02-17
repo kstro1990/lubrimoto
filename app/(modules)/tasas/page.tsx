@@ -15,20 +15,38 @@ import {
   Edit,
   RefreshCcw,
   TrendingDown,
-  AlertCircle
+  AlertCircle,
+  Cloud,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import Link from 'next/link';
 import { useNotifications } from '@/app/_components/NotificationProvider';
+import { useSincronizacionTasas } from '@/app/_hooks/useSincronizacionTasas';
+import { useTasas } from '@/app/_contexts/TasasContext';
 import FormularioTasa from './components/FormularioTasa';
 import HistorialGrafico from './components/HistorialGrafico';
 
 export default function TasasPage() {
   const { success, error: showError } = useNotifications();
+  const { actualizarTasas } = useTasas();
+  const { 
+    sincronizar, 
+    estado, 
+    resultado, 
+    error: syncError,
+    estaCargando,
+    hayConexion,
+    formatoTiempoTranscurrido,
+    ultimaSincronizacion 
+  } = useSincronizacionTasas();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingTasa, setEditingTasa] = useState<HistorialTasa | null>(null);
   const [showHistorial, setShowHistorial] = useState(false);
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [mostrarResultadoSync, setMostrarResultadoSync] = useState(false);
 
   // Obtener tasas de la base de datos
   const tasas = useLiveQuery(
@@ -128,6 +146,42 @@ export default function TasasPage() {
     });
   };
 
+  const handleSincronizar = async () => {
+    try {
+      const resultado = await sincronizar();
+      
+      // Actualizar contexto global
+      actualizarTasas(resultado.tasas);
+      
+      // Mostrar notificación con comparación
+      const { comparacion } = resultado;
+      let mensaje = `BCV: Bs. ${resultado.tasas.bcv.toFixed(2)} | Paralelo: Bs. ${resultado.tasas.paralelo.toFixed(2)}`;
+      
+      if (comparacion.bcv.cambioPorcentaje !== 0) {
+        const cambioBCV = comparacion.bcv.cambioPorcentaje;
+        const simboloBCV = cambioBCV > 0 ? '↑' : '↓';
+        mensaje += `\nBCV ${simboloBCV} ${Math.abs(cambioBCV).toFixed(2)}%`;
+      }
+      
+      if (comparacion.paralelo.cambioPorcentaje !== 0) {
+        const cambioPar = comparacion.paralelo.cambioPorcentaje;
+        const simboloPar = cambioPar > 0 ? '↑' : '↓';
+        mensaje += ` | Paralelo ${simboloPar} ${Math.abs(cambioPar).toFixed(2)}%`;
+      }
+      
+      if (resultado.desdeCache) {
+        success('Sincronización completada (Cache)', resultado.mensaje || 'Usando datos en caché');
+      } else {
+        success('Sincronización exitosa', mensaje);
+      }
+      
+      setMostrarResultadoSync(true);
+      setTimeout(() => setMostrarResultadoSync(false), 5000);
+    } catch (err: any) {
+      showError('Error de sincronización', err.message || 'No se pudo sincronizar con DolarApi');
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 space-y-6">
       {/* Header */}
@@ -151,6 +205,35 @@ export default function TasasPage() {
         </div>
         
         <div className="flex gap-2">
+          {/* Botón Sincronizar */}
+          <button
+            onClick={handleSincronizar}
+            disabled={estaCargando}
+            className={`inline-flex items-center px-4 py-2 border rounded-md shadow-sm text-sm font-medium transition-colors ${
+              estaCargando
+                ? 'border-gray-300 text-gray-500 bg-gray-100 cursor-not-allowed'
+                : hayConexion()
+                ? 'border-green-300 text-green-700 bg-green-50 hover:bg-green-100'
+                : 'border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100'
+            }`}
+          >
+            {estaCargando ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
+                Sincronizando...
+              </>
+            ) : (
+              <>
+                {hayConexion() ? (
+                  <Cloud className="h-4 w-4 mr-2" />
+                ) : (
+                  <WifiOff className="h-4 w-4 mr-2" />
+                )}
+                Sincronizar API
+              </>
+            )}
+          </button>
+          
           <button
             onClick={() => setShowHistorial(!showHistorial)}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
@@ -169,6 +252,57 @@ export default function TasasPage() {
             Nueva Tasa
           </button>
         </div>
+      </div>
+
+      {/* Información de última sincronización */}
+      <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+        <div className="flex items-center text-sm text-gray-600">
+          {hayConexion() ? (
+            <Wifi className="h-4 w-4 mr-2 text-green-500" />
+          ) : (
+            <WifiOff className="h-4 w-4 mr-2 text-orange-500" />
+          )}
+          <span>
+            {hayConexion() ? 'Conectado a internet' : 'Sin conexión - Usando cache'}
+          </span>
+          <span className="mx-2">•</span>
+          <span>
+            Última sincronización: {ultimaSincronizacion ? formatoTiempoTranscurrido() : 'Nunca'}
+          </span>
+        </div>
+        
+        {/* Resultado de sincronización */}
+        {mostrarResultadoSync && resultado && (
+          <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center">
+              <span className="font-medium text-gray-700">BCV:</span>
+              <span className={`ml-1 font-bold ${resultado.comparacion.bcv.cambioPorcentaje > 0 ? 'text-green-600' : resultado.comparacion.bcv.cambioPorcentaje < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                Bs. {resultado.tasas.bcv.toFixed(2)}
+                {resultado.comparacion.bcv.cambioPorcentaje !== 0 && (
+                  <span className="ml-1 text-xs">
+                    ({resultado.comparacion.bcv.cambioPorcentaje > 0 ? '↑' : '↓'} {Math.abs(resultado.comparacion.bcv.cambioPorcentaje).toFixed(2)}%)
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="flex items-center">
+              <span className="font-medium text-gray-700">Paralelo:</span>
+              <span className={`ml-1 font-bold ${resultado.comparacion.paralelo.cambioPorcentaje > 0 ? 'text-green-600' : resultado.comparacion.paralelo.cambioPorcentaje < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                Bs. {resultado.tasas.paralelo.toFixed(2)}
+                {resultado.comparacion.paralelo.cambioPorcentaje !== 0 && (
+                  <span className="ml-1 text-xs">
+                    ({resultado.comparacion.paralelo.cambioPorcentaje > 0 ? '↑' : '↓'} {Math.abs(resultado.comparacion.paralelo.cambioPorcentaje).toFixed(2)}%)
+                  </span>
+                )}
+              </span>
+            </div>
+            {resultado.desdeCache && (
+              <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded">
+                Cache
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Estadísticas */}

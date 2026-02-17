@@ -17,6 +17,7 @@ import { useFinanzasVZLA, CalculoOutput } from '@/app/_hooks/useFinanzasVZLA';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, Product } from '@/app/_db/db';
 import { useNotifications } from '@/app/_components/NotificationProvider';
+import { useTasas } from '@/app/_contexts/TasasContext';
 
 // ============================================================================
 // INTERFACES
@@ -142,6 +143,7 @@ export default function CalculadoraPreciosVZLA() {
   } = useFinanzasVZLA();
 
   const { success, error: showError } = useNotifications();
+  const { tasas, recargarTasas } = useTasas();
   
   // Obtener productos de la base de datos
   const productosDB = useLiveQuery(() => db.products.toArray(), []);
@@ -150,6 +152,21 @@ export default function CalculadoraPreciosVZLA() {
   const [productos, setProductos] = useState<ProductoCalculoRow[]>([]);
   const [calculos, setCalculos] = useState<CalculoOutput[]>([]);
   const [showHistorial, setShowHistorial] = useState(false);
+  const [tasasSincronizadas, setTasasSincronizadas] = useState(false);
+
+  // Sincronizar tasas del contexto global con el estado local
+  useEffect(() => {
+    if (tasas && !tasasSincronizadas) {
+      setTasaBCV(tasas.bcv);
+      setTasaParalelo(tasas.paralelo);
+      setTasasSincronizadas(true);
+    }
+  }, [tasas, tasasSincronizadas, setTasaBCV, setTasaParalelo]);
+
+  // Recargar tasas al montar el componente
+  useEffect(() => {
+    recargarTasas();
+  }, [recargarTasas]);
 
   // Inicializar productos desde la BD
   useEffect(() => {
