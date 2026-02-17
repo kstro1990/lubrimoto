@@ -85,6 +85,66 @@ export interface ExchangeRate extends Syncable {
   recordedAt: Date;
 }
 
+// ============================================================================
+// TASAS CAMBIARIAS VENEZUELA (BCV vs PARALELO)
+// ============================================================================
+
+export interface ConfiguracionCambiaria extends Syncable {
+  id?: number;
+  tasaBCV: number;           // Tasa oficial BCV
+  tasaParalelo: number;      // Tasa paralelo/reposición
+  margenGlobal: number;      // Margen de ganancia global (%)
+  fecha: Date;
+  esActiva: boolean;         // Si es la configuración actual
+}
+
+export interface HistorialTasa {
+  id?: number;
+  tasaBCV: number;
+  tasaParalelo: number;
+  brecha: number;            // Diferencia porcentual
+  fecha: Date;
+  hora: string;              // HH:MM
+  fuente?: string;
+  createdAt: Date;
+}
+
+export interface CalculoPrecioVenezuela {
+  id?: number;
+  productId: number;
+  configId: number;
+  
+  // Entradas
+  costoUSD: number;
+  margenPorcentaje: number;
+  tasaBCV: number;
+  tasaParalelo: number;
+  
+  // Cálculos
+  precioBaseUSD: number;
+  factorProteccion: number;
+  brechaCambiaria: number;
+  
+  // Precios finales
+  precioVentaUSD: number;
+  precioVentaBsProtegido: number;
+  precioVentaBsSinProteccion: number;
+  
+  // Análisis
+  gananciaEsperadaUSD: number;
+  gananciaRealUSD: number;
+  gananciaRealPorcentaje: number;
+  perdidaPorBrechaUSD: number;
+  perdidaPorBrechaPorcentaje: number;
+  
+  // Alertas
+  esGananciaBaja: boolean;
+  esPerdida: boolean;
+  
+  fechaCalculo: Date;
+  createdAt: Date;
+}
+
 // Inventory movement tracking
 export interface InventoryMovement {
   id?: number;
@@ -118,6 +178,11 @@ export class LubriMotosDB extends Dexie {
     attempts: number;
     error?: string;
   }>;
+  
+  // Nuevas tablas para cálculo de precios Venezuela
+  configuracionCambiaria!: Table<ConfiguracionCambiaria>;
+  historialTasas!: Table<HistorialTasa>;
+  calculosPrecios!: Table<CalculoPrecioVenezuela>;
 
   constructor() {
     super('lubrimotos-erp-db');
@@ -144,6 +209,22 @@ export class LubriMotosDB extends Dexie {
       exchangeRates: '++id, recordedAt',
       inventoryMovements: '++id, productId, type, createdAt',
       syncQueue: '++id, tableName, createdAt',
+    });
+    
+    // Version 6 - Add tables for Venezuela price calculation
+    this.version(6).stores({
+      products: '++id, sku, name, category, barcode, syncStatus, updatedAt, lastSyncAt, createdAt',
+      customers: '++id, name, syncStatus, updatedAt, lastSyncAt',
+      sales: '++id, date, syncStatus, updatedAt, lastSyncAt',
+      saleItems: '++id, saleId, productId, syncStatus, lastSyncAt',
+      payments: '++id, saleId, syncStatus, lastSyncAt',
+      exchangeRates: '++id, recordedAt',
+      inventoryMovements: '++id, productId, type, createdAt',
+      syncQueue: '++id, tableName, createdAt',
+      // New tables
+      configuracionCambiaria: '++id, fecha, esActiva, updatedAt',
+      historialTasas: '++id, fecha, hora, createdAt',
+      calculosPrecios: '++id, productId, configId, fechaCalculo, createdAt',
     });
   }
 }
