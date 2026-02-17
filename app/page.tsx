@@ -18,6 +18,16 @@ const modules: Module[] = [
     href: '/inventario',
   },
   {
+    name: 'Tasas Cambiarias',
+    description: 'Gestiona el historial de tasas BCV y Paralelo.',
+    href: '/tasas',
+  },
+  {
+    name: 'Calculadora',
+    description: 'Calcula precios considerando la dualidad cambiaria.',
+    href: '/calculadora',
+  },
+  {
     name: 'Reportes',
     description: 'Genera reportes y analiza el rendimiento de tu negocio.',
     href: '/reportes',
