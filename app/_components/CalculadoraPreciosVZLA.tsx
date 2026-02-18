@@ -412,6 +412,9 @@ export default function CalculadoraPreciosVZLA() {
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Costo ($)</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <span title="Costo ajustado por brecha cambiaria: Costo × (Paralelo/BCV)">Precio Idea ($)</span>
+                </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Base ($)</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Bs (Protegido)</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ganancia Real</th>
@@ -421,7 +424,7 @@ export default function CalculadoraPreciosVZLA() {
             <tbody className="bg-white divide-y divide-gray-200">
               {productos.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                     No hay productos en el inventario
                   </td>
                 </tr>
@@ -448,6 +451,23 @@ export default function CalculadoraPreciosVZLA() {
                           prefix="$"
                           className="w-32"
                         />
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <p 
+                          className={`text-sm font-medium ${calculo.precioIdeaMenorAlCosto ? 'text-red-600' : 'text-blue-600'}`}
+                          title={`Costo ajustado por brecha: $${producto.costoUSD.toFixed(2)} × ${calculo.factorProteccion.toFixed(4)} = $${calculo.precioIdea.toFixed(2)}`}
+                        >
+                          {formatearUSD(calculo.precioIdea)}
+                        </p>
+                        {calculo.precioIdeaMenorAlCosto && (
+                          <p className="text-xs text-red-500 flex items-center justify-end mt-1">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            Menor al costo
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-400">
+                          Factor: {calculo.factorProteccion.toFixed(4)}
+                        </p>
                       </td>
                       <td className="px-4 py-4 text-right">
                         <p className="text-sm font-medium text-gray-900">

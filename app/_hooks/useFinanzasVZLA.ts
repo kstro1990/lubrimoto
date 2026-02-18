@@ -27,6 +27,10 @@ export interface CalculoOutput {
   factorProteccion: number;        // tasaParalelo / tasaBCV
   brechaCambiaria: number;         // % de diferencia entre tasas
   
+  // Precio Idea (ajuste por brecha cambiaria)
+  precioIdea: number;              // costoUSD * factorProteccion
+  precioIdeaMenorAlCosto: boolean; // Alerta si precioIdea < costoUSD
+  
   // Precios finales
   precioVentaUSD: number;          // Igual al precio base
   precioVentaBsProtegido: number;  // precioBaseUSD * factor * tasaBCV
@@ -124,6 +128,11 @@ export function useFinanzasVZLA() {
     const factorProteccion = calcularFactorProteccion(tasaBCV, tasaParalelo);
     const brechaCambiaria = calcularBrecha(tasaBCV, tasaParalelo);
     
+    // Precio Idea (ajuste por brecha cambiaria)
+    // Fórmula: Costo × (Tasa Paralelo / Tasa BCV)
+    const precioIdea = costoUSD * factorProteccion;
+    const precioIdeaMenorAlCosto = precioIdea < costoUSD;
+    
     // Precios de venta
     const precioVentaUSD = precioBaseUSD;
     const precioVentaBsProtegido = precioBaseUSD * factorProteccion * tasaBCV;
@@ -155,6 +164,8 @@ export function useFinanzasVZLA() {
       precioBaseUSD,
       factorProteccion,
       brechaCambiaria,
+      precioIdea,
+      precioIdeaMenorAlCosto,
       precioVentaUSD,
       precioVentaBsProtegido,
       precioVentaBsSinProteccion,
