@@ -28,6 +28,11 @@ const modules: Module[] = [
     href: '/calculadora',
   },
   {
+    name: 'Punto de Equilibrio',
+    description: 'Monitorea metas mensuales, diarias y gestiona gastos fijos.',
+    href: '/punto-equilibrio',
+  },
+  {
     name: 'Reportes',
     description: 'Genera reportes y analiza el rendimiento de tu negocio.',
     href: '/reportes',

@@ -145,6 +145,50 @@ export interface CalculoPrecioVenezuela {
   createdAt: Date;
 }
 
+// ============================================================================
+// PUNTO DE EQUILIBRIO Y METAS
+// ============================================================================
+
+export interface GastoFijo {
+  id?: number;
+  nombre: string;                    // "Alquiler", "Servicios", "Nómina"
+  montoUSD: number;                  // Monto en dólares
+  categoria: 'fijo' | 'variable';    // Tipo de gasto
+  frecuencia: 'mensual' | 'semanal' | 'diario';
+  activo: boolean;                   // Si está activo o no
+  fechaInicio: Date;                 // Desde cuándo aplica
+  notas?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ConfiguracionMeta {
+  id?: number;
+  mes: number;                       // 1-12
+  año: number;                       // 2024, 2025, etc.
+  utilidadDeseadaUSD: number;        // Ganancia meta del mes
+  margenPromedioEsperado: number;    // % de margen esperado
+  diasLaborales: number;             // Default: 26
+  puntoEquilibrioCalculado: number;  // Calculado automáticamente
+  metaMensualCalculada: number;      // Calculado automáticamente
+  metaDiariaCalculada: number;       // Calculado automáticamente
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface HistorialVentasMeta {
+  id?: number;
+  mes: number;
+  año: number;
+  totalVentasUSD: number;            // Ventas reales del mes
+  metaMensual: number;               // Meta establecida
+  porcentajeCumplimiento: number;    // % de cumplimiento
+  diasLaboralesTranscurridos: number;
+  diasLaboralesTotales: number;
+  ventaPromedioDiaria: number;       // Ventas / días transcurridos
+  createdAt: Date;
+}
+
 // Inventory movement tracking
 export interface InventoryMovement {
   id?: number;
@@ -183,6 +227,11 @@ export class LubriMotosDB extends Dexie {
   configuracionCambiaria!: Table<ConfiguracionCambiaria>;
   historialTasas!: Table<HistorialTasa>;
   calculosPrecios!: Table<CalculoPrecioVenezuela>;
+  
+  // Tablas para punto de equilibrio y metas
+  gastosFijos!: Table<GastoFijo>;
+  configuracionMetas!: Table<ConfiguracionMeta>;
+  historialVentasMeta!: Table<HistorialVentasMeta>;
 
   constructor() {
     super('lubrimotos-erp-db');
@@ -225,6 +274,25 @@ export class LubriMotosDB extends Dexie {
       configuracionCambiaria: '++id, fecha, esActiva, updatedAt',
       historialTasas: '++id, fecha, hora, createdAt',
       calculosPrecios: '++id, productId, configId, fechaCalculo, createdAt',
+    });
+    
+    // Version 7 - Add tables for break-even point and goals
+    this.version(7).stores({
+      products: '++id, sku, name, category, barcode, syncStatus, updatedAt, lastSyncAt, createdAt',
+      customers: '++id, name, syncStatus, updatedAt, lastSyncAt',
+      sales: '++id, date, syncStatus, updatedAt, lastSyncAt',
+      saleItems: '++id, saleId, productId, syncStatus, lastSyncAt',
+      payments: '++id, saleId, syncStatus, lastSyncAt',
+      exchangeRates: '++id, recordedAt',
+      inventoryMovements: '++id, productId, type, createdAt',
+      syncQueue: '++id, tableName, createdAt',
+      configuracionCambiaria: '++id, fecha, esActiva, updatedAt',
+      historialTasas: '++id, fecha, hora, createdAt',
+      calculosPrecios: '++id, productId, configId, fechaCalculo, createdAt',
+      // Break-even and goals tables
+      gastosFijos: '++id, categoria, activo, updatedAt',
+      configuracionMetas: '++id, mes, año, updatedAt',
+      historialVentasMeta: '++id, mes, año, createdAt',
     });
   }
 }
