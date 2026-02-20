@@ -62,26 +62,43 @@ export default function PuntoEquilibrioPage() {
 
   const handleSaveGasto = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Debug: mostrar datos del formulario
+    console.log('=== DEBUG: Guardando gasto ===');
+    console.log('Formulario:', gastoForm);
+    console.log('Editando:', editingGasto);
+    
     try {
       if (editingGasto?.id) {
+        console.log('Actualizando gasto existente ID:', editingGasto.id);
         await actualizarGastoFijo(editingGasto.id, {
           ...gastoForm,
           updatedAt: new Date(),
         });
         success('Gasto actualizado', 'El gasto fijo ha sido actualizado');
       } else {
-        await guardarGastoFijo({
+        console.log('Creando nuevo gasto...');
+        const now = new Date();
+        const gastoData = {
           ...gastoForm,
           activo: true,
-          fechaInicio: new Date(),
-        });
-        success('Gasto agregado', 'El gasto fijo ha sido registrado');
+          fechaInicio: now,
+          createdAt: now,
+          updatedAt: now,
+        };
+        console.log('Datos a guardar:', gastoData);
+        
+        const id = await guardarGastoFijo(gastoData);
+        console.log('Gasto guardado con ID:', id);
+        success('Gasto agregado', 'El gasto fijo ha sido registrado exitosamente');
       }
       setShowGastoForm(false);
       setEditingGasto(null);
       setGastoForm({ nombre: '', montoUSD: 0, categoria: 'fijo', frecuencia: 'mensual', notas: '' });
-    } catch (err) {
-      showError('Error', 'No se pudo guardar el gasto');
+    } catch (err: any) {
+      console.error('Error al guardar:', err);
+      console.error('Stack:', err.stack);
+      showError('Error', `No se pudo guardar el gasto: ${err.message}`);
     }
   };
 

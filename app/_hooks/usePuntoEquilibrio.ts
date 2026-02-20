@@ -55,8 +55,7 @@ export function usePuntoEquilibrio(mes?: number, año?: number) {
   // Obtener datos de la BD
   const gastosFijos = useLiveQuery(
     () => db.gastosFijos
-      .where('activo')
-      .equals(1)
+      .filter(gasto => gasto.activo === true)
       .toArray(),
     []
   );
@@ -334,14 +333,17 @@ export function usePuntoEquilibrio(mes?: number, año?: number) {
   // FUNCIONES CRUD
   // ============================================================================
 
-  const guardarGastoFijo = useCallback(async (gasto: Omit<GastoFijo, 'id' | 'createdAt' | 'updatedAt'>): Promise<number> => {
-    const now = new Date();
-    const id = await db.gastosFijos.add({
-      ...gasto,
-      createdAt: now,
-      updatedAt: now,
-    });
-    return id;
+  const guardarGastoFijo = useCallback(async (gasto: Omit<GastoFijo, 'id'>): Promise<number> => {
+    console.log('=== DEBUG: Hook guardarGastoFijo ===');
+    console.log('Datos recibidos:', gasto);
+    try {
+      const id = await db.gastosFijos.add(gasto);
+      console.log('Guardado exitoso, ID:', id);
+      return id;
+    } catch (error: any) {
+      console.error('Error en hook guardarGastoFijo:', error);
+      throw error;
+    }
   }, []);
 
   const actualizarGastoFijo = useCallback(async (id: number, gasto: Partial<GastoFijo>): Promise<void> => {

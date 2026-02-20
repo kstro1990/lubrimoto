@@ -290,7 +290,7 @@ export class LubriMotosDB extends Dexie {
       historialTasas: '++id, fecha, hora, createdAt',
       calculosPrecios: '++id, productId, configId, fechaCalculo, createdAt',
       // Break-even and goals tables
-      gastosFijos: '++id, categoria, activo, updatedAt',
+      gastosFijos: '++id, updatedAt',
       configuracionMetas: '++id, mes, año, updatedAt',
       historialVentasMeta: '++id, mes, año, createdAt',
     });
