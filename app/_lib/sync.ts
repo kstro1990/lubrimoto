@@ -217,15 +217,29 @@ async function syncSale(sale: Sale): Promise<void> {
   const saleItemsData = [];
   for (const item of items) {
     // item.productId is the SKU, we need to find the Supabase product ID
-    const localProduct = await db.products.where('sku').equals(item.productId).first();
+    let localProduct = await db.products.where('sku').equals(item.productId).first();
     if (!localProduct) {
       throw new Error(`Product not found locally: ${item.productId}`);
     }
     
     // Use localId if available (Supabase ID), otherwise we need to find it
     let supabaseProductId = localProduct.localId;
+    
+    // If product is not synced, try to sync it first
     if (!supabaseProductId) {
-      // Look up in Supabase by SKU
+      logInfo('Product not synced, attempting to sync first', 'syncSale', { sku: item.productId });
+      try {
+        await syncProduct(localProduct);
+        // Reload product to get the new localId
+        localProduct = await db.products.where('sku').equals(item.productId).first();
+        supabaseProductId = localProduct?.localId;
+      } catch (syncError) {
+        logWarn('Could not sync product, trying to find in Supabase', 'syncSale', { sku: item.productId, error: syncError });
+      }
+    }
+    
+    // If still no localId, try to find in Supabase by SKU
+    if (!supabaseProductId) {
       const { data: productData, error: productError } = await supabase
         .from('products')
         .select('id')
@@ -233,29 +247,50 @@ async function syncSale(sale: Sale): Promise<void> {
         .single();
       
       if (productError || !productData) {
-        throw new Error(`Product ${item.productId} not found in Supabase`);
+        // Product doesn't exist in Supabase, use a placeholder or skip
+        logWarn('Product not found in Supabase, using null reference', 'syncSale', { sku: item.productId });
+        supabaseProductId = undefined;
+      } else {
+        supabaseProductId = productData.id;
+        // Update local record with Supabase ID
+        if (localProduct?.id) {
+          await db.products.update(localProduct.id, {
+            localId: productData.id,
+            syncStatus: SyncStatus.SYNCED,
+            lastSyncAt: new Date(),
+          });
+        }
       }
-      supabaseProductId = productData.id;
     }
     
-    saleItemsData.push({
-      sale_id: saleData.id,
-      product_id: supabaseProductId,
-      quantity: item.quantity,
-      price_per_unit_usd: item.pricePerUnitUsd,
-    });
+    // Only add item if we have a valid product ID
+    if (supabaseProductId) {
+      saleItemsData.push({
+        sale_id: saleData.id,
+        product_id: supabaseProductId,
+        quantity: item.quantity,
+        price_per_unit_usd: item.pricePerUnitUsd,
+      });
+    } else {
+      logWarn('Skipping sale item - no valid product ID', 'syncSale', { sku: item.productId, saleId: saleData.id });
+    }
   }
 
-  const { error: itemsError } = await supabase
-    .from('sale_items')
-    .insert(saleItemsData);
+  // Skip if no valid items to insert
+  if (saleItemsData.length === 0 && items.length > 0) {
+    logWarn('No valid items to sync for sale', 'syncSale', { saleId: sale.id });
+  } else if (saleItemsData.length > 0) {
+    const { error: itemsError } = await supabase
+      .from('sale_items')
+      .insert(saleItemsData);
 
-  if (itemsError) {
-    logError('Failed to insert sale items', itemsError, 'syncSale', { saleId: sale.id });
-    throw itemsError;
+    if (itemsError) {
+      logError('Failed to insert sale items', itemsError, 'syncSale', { saleId: sale.id });
+      throw itemsError;
+    }
+    
+    logInfo('Sale items inserted', 'syncSale', { saleId: sale.id, itemCount: saleItemsData.length });
   }
-  
-  logInfo('Sale items inserted', 'syncSale', { saleId: sale.id, itemCount: saleItemsData.length });
 
   // Update local records using transaction
   await db.transaction('rw', [db.sales, db.saleItems], async () => {

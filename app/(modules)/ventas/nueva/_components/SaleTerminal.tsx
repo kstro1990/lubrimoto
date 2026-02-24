@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, Product, Customer, Sale, SaleItem, SyncStatus } from '@/app/_db/db';
 import { supabase } from '@/app/_lib/supabase';
+import { syncPendingData } from '@/app/_lib/sync';
 import { printFiscalInvoice } from '@/app/_lib/printing';
 import { useNotifications } from '@/app/_components/NotificationProvider';
 import { logInfo, logError, logWarn } from '@/app/_lib/logger';
@@ -147,6 +148,27 @@ export default function SaleTerminal() {
         `Venta #${resultSaleId} procesada exitosamente. Total: $${totalWithTax.toFixed(2)}`,
         5000
       );
+
+      // Sincronizar automáticamente con Supabase
+      try {
+        const syncResult = await syncPendingData();
+        if (syncResult.synced > 0) {
+          success(
+            'Sincronización Exitosa',
+            `${syncResult.synced} registro(s) sincronizado(s) con la nube`,
+            4000
+          );
+        } else if (!syncResult.success && syncResult.errors.length > 0) {
+          showError(
+            'Error de Sincronización',
+            syncResult.errors[0],
+            6000
+          );
+        }
+      } catch (syncErr) {
+        logError('Error en sincronización automática', syncErr as Error, 'SaleTerminal');
+      }
+
       setCart([]);
       setCustomer({ name: '', email: '' });
       setTotal(0);
