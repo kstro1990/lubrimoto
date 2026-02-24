@@ -259,42 +259,36 @@ export default function DiagnosticoPage() {
     try {
       addLog('🔄 Forzando resincronización de todos los datos...');
       
-      // Forzar productos
+      // Forzar productos - solo cambiar syncStatus, no tocar localId
       const allProducts = await db.products.toArray();
       let productsForced = 0;
       for (const product of allProducts) {
         await db.products.update(product.id!, {
           syncStatus: SyncStatus.PENDING,
-          localId: undefined,
-          lastSyncAt: undefined,
           updatedAt: new Date(),
         });
         productsForced++;
       }
       addLog(`✅ ${productsForced} productos marcados como pendientes`);
       
-      // Forzar ventas
+      // Forzar ventas - solo cambiar syncStatus, no tocar localId
       const allSales = await db.sales.toArray();
       let salesForced = 0;
       for (const sale of allSales) {
         await db.sales.update(sale.id!, {
           syncStatus: SyncStatus.PENDING,
-          localId: undefined,
-          lastSyncAt: undefined,
           updatedAt: new Date(),
         });
         salesForced++;
       }
       addLog(`✅ ${salesForced} ventas marcadas como pendientes`);
       
-      // Forzar sale items
+      // Forzar sale items - solo cambiar syncStatus, no tocar localId
       const allSaleItems = await db.saleItems.toArray();
       let itemsForced = 0;
       for (const item of allSaleItems) {
         await db.saleItems.update(item.id!, {
           syncStatus: SyncStatus.PENDING,
-          localId: undefined,
-          lastSyncAt: undefined,
           updatedAt: new Date(),
         });
         itemsForced++;
