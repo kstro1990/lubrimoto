@@ -250,6 +250,82 @@ export default function DiagnosticoPage() {
     }
   }
 
+  async function forceSyncAll() {
+    if (!confirm('⚠️ ATENCIÓN: Esto marcará TODOS los productos y ventas locales como pendientes de sincronización. ¿Continuar?')) return;
+    
+    setIsRunning(true);
+    setLogs([]);
+    
+    try {
+      addLog('🔄 Forzando resincronización de todos los datos...');
+      
+      // Forzar productos
+      const allProducts = await db.products.toArray();
+      let productsForced = 0;
+      for (const product of allProducts) {
+        await db.products.update(product.id!, {
+          syncStatus: SyncStatus.PENDING,
+          localId: undefined,
+          lastSyncAt: undefined,
+          updatedAt: new Date(),
+        });
+        productsForced++;
+      }
+      addLog(`✅ ${productsForced} productos marcados como pendientes`);
+      
+      // Forzar ventas
+      const allSales = await db.sales.toArray();
+      let salesForced = 0;
+      for (const sale of allSales) {
+        await db.sales.update(sale.id!, {
+          syncStatus: SyncStatus.PENDING,
+          localId: undefined,
+          lastSyncAt: undefined,
+          updatedAt: new Date(),
+        });
+        salesForced++;
+      }
+      addLog(`✅ ${salesForced} ventas marcadas como pendientes`);
+      
+      // Forzar sale items
+      const allSaleItems = await db.saleItems.toArray();
+      let itemsForced = 0;
+      for (const item of allSaleItems) {
+        await db.saleItems.update(item.id!, {
+          syncStatus: SyncStatus.PENDING,
+          localId: undefined,
+          lastSyncAt: undefined,
+          updatedAt: new Date(),
+        });
+        itemsForced++;
+      }
+      addLog(`✅ ${itemsForced} items de ventas marcados como pendientes`);
+      
+      addLog('🎯 Todos los datos marcados como pendientes. Ejecutando sincronización...');
+      
+      // Ejecutar sincronización
+      const result = await bidirectionalSync();
+      
+      if (result.success) {
+        addLog(`✅ Sincronización exitosa!`);
+        addLog(`   📤 Subidos: ${result.uploaded}`);
+        addLog(`   📥 Descargados: ${result.downloaded}`);
+      } else {
+        addLog(`❌ Sincronización con errores:`);
+        result.errors.forEach(err => addLog(`   - ${err}`));
+      }
+      
+      // Actualizar estadísticas
+      await loadDetailedStats();
+      
+    } catch (err: any) {
+      addLog(`❌ Error: ${err.message}`);
+      console.error('Force sync error:', err);
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
   return (
     <div className="container mx-auto p-6 max-w-4xl">
       <h1 className="text-3xl font-bold mb-6">🔧 Diagnóstico de Sincronización</h1>
@@ -330,6 +406,14 @@ export default function DiagnosticoPage() {
             🧹 Limpiar Ventas Nube
           </button>
         </div>
+
+        <button
+          onClick={forceSyncAll}
+          disabled={isRunning}
+          className="w-full bg-red-600 text-white py-3 px-6 rounded-lg hover:bg-red-700 disabled:opacity-50 font-semibold"
+        >
+          ⚡ Forzar Sincronización de Todos los Datos
+        </button>
         
         <div className="grid grid-cols-2 gap-3">
           <button
