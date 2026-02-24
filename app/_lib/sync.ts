@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import db, { SyncStatus, Product, Sale, SaleItem, Customer } from '../_db/db';
+import db, { SyncStatus, Product, Sale, SaleItem, Customer, GastoFijo, ConfiguracionMeta, HistorialVentasMeta } from '../_db/db';
 import { logInfo, logError, logWarn } from './logger';
 
 // Simple event emitter for sync status
@@ -174,44 +174,70 @@ async function syncProduct(product: Product): Promise<void> {
 async function syncSale(sale: Sale): Promise<void> {
   logInfo('Syncing sale', 'syncSale', { saleId: sale.id, total: sale.totalAmountUsd, localId: sale.localId });
   
-  // Check if already synced (has localId)
-  if (sale.localId) {
-    logInfo('Sale already synced, skipping', 'syncSale', { saleId: sale.id, localId: sale.localId });
-    
-    // Update sync status and timestamp even if already synced
-    await db.sales.update(sale.id!, {
-      syncStatus: SyncStatus.SYNCED,
-      lastSyncAt: new Date(),
-      updatedAt: new Date(),
-    });
-    
-    return;
-  }
-  
   // Get sale items
   const items = await db.saleItems.where('saleId').equals(sale.id!).toArray();
   logInfo(`Found ${items.length} items for sale`, 'syncSale', { saleId: sale.id });
   
-  // First sync the sale
-  const { data: saleData, error: saleError } = await supabase
-    .from('sales')
-    .insert({
-      subtotal_usd: sale.subtotalUsd,
-      iva_amount_usd: sale.ivaAmountUsd,
-      igtf_amount_usd: sale.igtfAmountUsd,
-      total_amount_usd: sale.totalAmountUsd,
-      exchange_rate_ves: sale.exchangeRateVes,
-      total_amount_ves: sale.totalAmountVes,
-    })
-    .select()
-    .single();
-
-  if (saleError) {
-    logError('Failed to insert sale', saleError, 'syncSale', { saleId: sale.id });
-    throw saleError;
+  // Check if sale already exists in Supabase by local_id
+  let existingSaleId: string | null = null;
+  
+  if (sale.localId) {
+    // Try to find by local_id first
+    const { data: existingByLocalId } = await supabase
+      .from('sales')
+      .select('id')
+      .eq('local_id', sale.id)
+      .maybeSingle();
+    
+    if (existingByLocalId) {
+      existingSaleId = existingByLocalId.id;
+      logInfo('Found existing sale by local_id', 'syncSale', { saleId: sale.id, existingSaleId });
+    }
   }
   
-  logInfo('Sale inserted to Supabase', 'syncSale', { saleId: sale.id, supabaseId: saleData.id });
+  // Prepare sale data
+  const saleDataToSync = {
+    local_id: sale.id,
+    subtotal_usd: sale.subtotalUsd,
+    iva_amount_usd: sale.ivaAmountUsd,
+    igtf_amount_usd: sale.igtfAmountUsd,
+    total_amount_usd: sale.totalAmountUsd,
+    exchange_rate_ves: sale.exchangeRateVes,
+    total_amount_ves: sale.totalAmountVes,
+  };
+  
+  let saleData;
+  
+  if (existingSaleId) {
+    // Update existing sale
+    const { data, error: saleError } = await supabase
+      .from('sales')
+      .update(saleDataToSync)
+      .eq('id', existingSaleId)
+      .select()
+      .single();
+    
+    if (saleError) {
+      logError('Failed to update sale', saleError, 'syncSale', { saleId: sale.id });
+      throw saleError;
+    }
+    saleData = data;
+    logInfo('Sale updated in Supabase', 'syncSale', { saleId: sale.id, supabaseId: saleData.id });
+  } else {
+    // Insert new sale
+    const { data, error: saleError } = await supabase
+      .from('sales')
+      .insert(saleDataToSync)
+      .select()
+      .single();
+    
+    if (saleError) {
+      logError('Failed to insert sale', saleError, 'syncSale', { saleId: sale.id });
+      throw saleError;
+    }
+    saleData = data;
+    logInfo('Sale inserted to Supabase', 'syncSale', { saleId: sale.id, supabaseId: saleData.id });
+  }
 
   // Then sync the items - need to get Supabase product IDs
   const saleItemsData = [];
@@ -279,6 +305,137 @@ async function syncSale(sale: Sale): Promise<void> {
   });
   
   logInfo('Sale synced successfully', 'syncSale', { saleId: sale.id, supabaseId: saleData.id });
+}
+
+// Sync a single fixed expense to Supabase
+async function syncFixedExpense(expense: GastoFijo): Promise<void> {
+  logInfo('Syncing fixed expense', 'syncFixedExpense', { id: expense.id, name: expense.nombre });
+  
+  try {
+    const expenseData = {
+      local_id: expense.id,
+      name: expense.nombre,
+      amount_usd: expense.montoUSD,
+      category: expense.categoria,
+      frequency: expense.frecuencia,
+      is_active: expense.activo,
+      start_date: new Date(expense.fechaInicio).toISOString().split('T')[0],
+      notes: expense.notas,
+    };
+    
+    const { data, error } = await supabase
+      .from('fixed_expenses')
+      .upsert(expenseData, { onConflict: 'local_id' })
+      .select()
+      .single();
+    
+    if (error) {
+      logError('Supabase error', error, 'syncFixedExpense', { id: expense.id });
+      throw new Error(`Supabase error: ${error.message}`);
+    }
+    
+    if (expense.id) {
+      await db.gastosFijos.update(expense.id, {
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    
+    logInfo('Fixed expense synced successfully', 'syncFixedExpense', { id: expense.id });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    logError('syncFixedExpense failed', error as Error, 'syncFixedExpense');
+    throw error;
+  }
+}
+
+// Sync a single goals configuration to Supabase
+async function syncGoalsConfiguration(config: ConfiguracionMeta): Promise<void> {
+  logInfo('Syncing goals configuration', 'syncGoalsConfiguration', { id: config.id, month: config.mes, year: config.año });
+  
+  try {
+    const configData = {
+      local_id: config.id,
+      month: config.mes,
+      year: config.año,
+      desired_profit_usd: config.utilidadDeseadaUSD,
+      expected_margin_percent: config.margenPromedioEsperado,
+      working_days: config.diasLaborales,
+      break_even_calculated: config.puntoEquilibrioCalculado,
+      monthly_goal_calculated: config.metaMensualCalculada,
+      daily_goal_calculated: config.metaDiariaCalculada,
+    };
+    
+    const { data, error } = await supabase
+      .from('goals_configuration')
+      .upsert(configData, { onConflict: 'month,year' })
+      .select()
+      .single();
+    
+    if (error) {
+      logError('Supabase error', error, 'syncGoalsConfiguration', { id: config.id });
+      throw new Error(`Supabase error: ${error.message}`);
+    }
+    
+    if (config.id) {
+      await db.configuracionMetas.update(config.id, {
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    
+    logInfo('Goals configuration synced successfully', 'syncGoalsConfiguration', { id: config.id });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    logError('syncGoalsConfiguration failed', error as Error, 'syncGoalsConfiguration');
+    throw error;
+  }
+}
+
+// Sync a single sales goals history to Supabase
+async function syncSalesGoalsHistory(history: HistorialVentasMeta): Promise<void> {
+  logInfo('Syncing sales goals history', 'syncSalesGoalsHistory', { id: history.id, month: history.mes, year: history.año });
+  
+  try {
+    const historyData = {
+      local_id: history.id,
+      month: history.mes,
+      year: history.año,
+      total_sales_usd: history.totalVentasUSD,
+      monthly_goal: history.metaMensual,
+      compliance_percent: history.porcentajeCumplimiento,
+      working_days_elapsed: history.diasLaboralesTranscurridos,
+      working_days_total: history.diasLaboralesTotales,
+      average_daily_sales: history.ventaPromedioDiaria,
+    };
+    
+    const { data, error } = await supabase
+      .from('sales_goals_history')
+      .upsert(historyData, { onConflict: 'month,year' })
+      .select()
+      .single();
+    
+    if (error) {
+      logError('Supabase error', error, 'syncSalesGoalsHistory', { id: history.id });
+      throw new Error(`Supabase error: ${error.message}`);
+    }
+    
+    if (history.id) {
+      await db.historialVentasMeta.update(history.id, {
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    
+    logInfo('Sales goals history synced successfully', 'syncSalesGoalsHistory', { id: history.id });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    logError('syncSalesGoalsHistory failed', error as Error, 'syncSalesGoalsHistory');
+    throw error;
+  }
 }
 
 // Main sync function
@@ -352,6 +509,90 @@ export async function syncPendingData(): Promise<{
           updatedAt: new Date(),
         });
       }
+    }
+
+    // Sync fixed expenses (gastos_fijos)
+    try {
+      const pendingExpenses = await db.gastosFijos
+        .where('syncStatus')
+        .equals(SyncStatus.PENDING)
+        .toArray();
+
+      logInfo('Found pending fixed expenses', 'syncPendingData', { count: pendingExpenses.length });
+
+      for (const expense of pendingExpenses) {
+        try {
+          await syncFixedExpense(expense);
+          synced++;
+        } catch (error) {
+          failed++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Fixed Expense ${expense.nombre}: ${errorMsg}`);
+          await db.gastosFijos.update(expense.id!, {
+            syncStatus: SyncStatus.ERROR,
+            syncError: errorMsg,
+            updatedAt: new Date(),
+          });
+        }
+      }
+    } catch (e) {
+      logWarn('Could not sync fixed expenses (table may not exist)', 'syncPendingData');
+    }
+
+    // Sync goals configuration
+    try {
+      const pendingConfigs = await db.configuracionMetas
+        .where('syncStatus')
+        .equals(SyncStatus.PENDING)
+        .toArray();
+
+      logInfo('Found pending goals configurations', 'syncPendingData', { count: pendingConfigs.length });
+
+      for (const config of pendingConfigs) {
+        try {
+          await syncGoalsConfiguration(config);
+          synced++;
+        } catch (error) {
+          failed++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Goals Config ${config.mes}/${config.año}: ${errorMsg}`);
+          await db.configuracionMetas.update(config.id!, {
+            syncStatus: SyncStatus.ERROR,
+            syncError: errorMsg,
+            updatedAt: new Date(),
+          });
+        }
+      }
+    } catch (e) {
+      logWarn('Could not sync goals configurations (table may not exist)', 'syncPendingData');
+    }
+
+    // Sync sales goals history
+    try {
+      const pendingHistory = await db.historialVentasMeta
+        .where('syncStatus')
+        .equals(SyncStatus.PENDING)
+        .toArray();
+
+      logInfo('Found pending sales goals history', 'syncPendingData', { count: pendingHistory.length });
+
+      for (const history of pendingHistory) {
+        try {
+          await syncSalesGoalsHistory(history);
+          synced++;
+        } catch (error) {
+          failed++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Sales History ${history.mes}/${history.año}: ${errorMsg}`);
+          await db.historialVentasMeta.update(history.id!, {
+            syncStatus: SyncStatus.ERROR,
+            syncError: errorMsg,
+            updatedAt: new Date(),
+          });
+        }
+      }
+    } catch (e) {
+      logWarn('Could not sync sales goals history (table may not exist)', 'syncPendingData');
     }
 
     syncEvents.emit('sync-complete', { synced, failed, errors });

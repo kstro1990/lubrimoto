@@ -149,7 +149,7 @@ export interface CalculoPrecioVenezuela {
 // PUNTO DE EQUILIBRIO Y METAS
 // ============================================================================
 
-export interface GastoFijo {
+export interface GastoFijo extends Syncable {
   id?: number;
   nombre: string;                    // "Alquiler", "Servicios", "Nómina"
   montoUSD: number;                  // Monto en dólares
@@ -158,11 +158,9 @@ export interface GastoFijo {
   activo: boolean;                   // Si está activo o no
   fechaInicio: Date;                 // Desde cuándo aplica
   notas?: string;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
-export interface ConfiguracionMeta {
+export interface ConfiguracionMeta extends Syncable {
   id?: number;
   mes: number;                       // 1-12
   año: number;                       // 2024, 2025, etc.
@@ -172,11 +170,9 @@ export interface ConfiguracionMeta {
   puntoEquilibrioCalculado: number;  // Calculado automáticamente
   metaMensualCalculada: number;      // Calculado automáticamente
   metaDiariaCalculada: number;       // Calculado automáticamente
-  createdAt: Date;
-  updatedAt: Date;
 }
 
-export interface HistorialVentasMeta {
+export interface HistorialVentasMeta extends Syncable {
   id?: number;
   mes: number;
   año: number;
@@ -186,7 +182,6 @@ export interface HistorialVentasMeta {
   diasLaboralesTranscurridos: number;
   diasLaboralesTotales: number;
   ventaPromedioDiaria: number;       // Ventas / días transcurridos
-  createdAt: Date;
 }
 
 // Inventory movement tracking
@@ -290,9 +285,9 @@ export class LubriMotosDB extends Dexie {
       historialTasas: '++id, fecha, hora, createdAt',
       calculosPrecios: '++id, productId, configId, fechaCalculo, createdAt',
       // Break-even and goals tables
-      gastosFijos: '++id, updatedAt',
-      configuracionMetas: '++id, mes, año, updatedAt',
-      historialVentasMeta: '++id, mes, año, createdAt',
+      gastosFijos: '++id, nombre, syncStatus, updatedAt, lastSyncAt',
+      configuracionMetas: '++id, mes, año, syncStatus, updatedAt, lastSyncAt',
+      historialVentasMeta: '++id, mes, año, syncStatus, createdAt',
     });
   }
 }
