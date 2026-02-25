@@ -79,6 +79,7 @@ export default function NewProductPage() {
           notes: 'Producto creado',
           createdBy: 'Usuario',
           createdAt: new Date(),
+          updatedAt: new Date(),
         });
         
         if (process.env.NODE_ENV === 'development') {

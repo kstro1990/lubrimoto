@@ -1,5 +1,20 @@
 import { supabase } from './supabase';
-import db, { SyncStatus, Product, Sale, SaleItem, Customer, GastoFijo, ConfiguracionMeta, HistorialVentasMeta } from '../_db/db';
+import db, { 
+  SyncStatus, 
+  Product, 
+  Sale, 
+  SaleItem, 
+  Customer, 
+  GastoFijo, 
+  ConfiguracionMeta, 
+  HistorialVentasMeta,
+  InventoryMovement,
+  ExchangeRate,
+  Payment,
+  ConfiguracionCambiaria,
+  HistorialTasa,
+  CalculoPrecioVenezuela
+} from '../_db/db';
 import { logInfo, logError, logWarn } from './logger';
 
 // Simple event emitter for sync status
@@ -438,6 +453,310 @@ async function syncSalesGoalsHistory(history: HistorialVentasMeta): Promise<void
   }
 }
 
+// Sync a single customer to Supabase
+async function syncCustomer(customer: Customer): Promise<void> {
+  logInfo('Syncing customer', 'syncCustomer', { id: customer.id, name: customer.name });
+  
+  try {
+    const customerData = {
+      local_id: customer.id,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      address: customer.address,
+    };
+    
+    const { data, error } = await supabase
+      .from('customers')
+      .upsert(customerData, { onConflict: 'local_id' })
+      .select()
+      .single();
+    
+    if (error) {
+      logError('Supabase error', error, 'syncCustomer', { id: customer.id });
+      throw new Error(`Supabase error: ${error.message}`);
+    }
+    
+    if (customer.id) {
+      await db.customers.update(customer.id, {
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    
+    logInfo('Customer synced successfully', 'syncCustomer', { id: customer.id });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    logError('syncCustomer failed', error as Error, 'syncCustomer');
+    throw error;
+  }
+}
+
+// Sync a single payment to Supabase
+async function syncPayment(payment: Payment): Promise<void> {
+  logInfo('Syncing payment', 'syncPayment', { id: payment.id, saleId: payment.saleId });
+  
+  try {
+    const paymentData = {
+      local_id: payment.id,
+      sale_id: payment.saleId,
+      method: payment.method,
+      amount: payment.amount,
+      reference_code: payment.referenceCode,
+    };
+    
+    const { data, error } = await supabase
+      .from('payments')
+      .upsert(paymentData, { onConflict: 'local_id' })
+      .select()
+      .single();
+    
+    if (error) {
+      logError('Supabase error', error, 'syncPayment', { id: payment.id });
+      throw new Error(`Supabase error: ${error.message}`);
+    }
+    
+    if (payment.id) {
+      await db.payments.update(payment.id, {
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    
+    logInfo('Payment synced successfully', 'syncPayment', { id: payment.id });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    logError('syncPayment failed', error as Error, 'syncPayment');
+    throw error;
+  }
+}
+
+// Sync a single exchange rate to Supabase
+async function syncExchangeRate(rate: ExchangeRate): Promise<void> {
+  logInfo('Syncing exchange rate', 'syncExchangeRate', { id: rate.id, rate: rate.rate });
+  
+  try {
+    const rateData = {
+      local_id: rate.id,
+      rate: rate.rate,
+      recorded_at: rate.recordedAt.toISOString(),
+    };
+    
+    const { data, error } = await supabase
+      .from('exchange_rates')
+      .upsert(rateData, { onConflict: 'local_id' })
+      .select()
+      .single();
+    
+    if (error) {
+      logError('Supabase error', error, 'syncExchangeRate', { id: rate.id });
+      throw new Error(`Supabase error: ${error.message}`);
+    }
+    
+    if (rate.id) {
+      await db.exchangeRates.update(rate.id, {
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    
+    logInfo('Exchange rate synced successfully', 'syncExchangeRate', { id: rate.id });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    logError('syncExchangeRate failed', error as Error, 'syncExchangeRate');
+    throw error;
+  }
+}
+
+// Sync a single inventory movement to Supabase
+async function syncInventoryMovement(movement: InventoryMovement): Promise<void> {
+  logInfo('Syncing inventory movement', 'syncInventoryMovement', { id: movement.id, productSku: movement.productSku });
+  
+  try {
+    const movementData = {
+      local_id: movement.id,
+      product_id: movement.productId,
+      product_sku: movement.productSku,
+      product_name: movement.productName,
+      type: movement.type,
+      quantity: movement.quantity,
+      previous_stock: movement.previousStock,
+      new_stock: movement.newStock,
+      reference_id: movement.referenceId,
+      notes: movement.notes,
+      created_by: movement.createdBy,
+      created_at: movement.createdAt.toISOString(),
+    };
+    
+    const { data, error } = await supabase
+      .from('inventory_movements')
+      .upsert(movementData, { onConflict: 'local_id' })
+      .select()
+      .single();
+    
+    if (error) {
+      logError('Supabase error', error, 'syncInventoryMovement', { id: movement.id });
+      throw new Error(`Supabase error: ${error.message}`);
+    }
+    
+    if (movement.id) {
+      await db.inventoryMovements.update(movement.id, {
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    
+    logInfo('Inventory movement synced successfully', 'syncInventoryMovement', { id: movement.id });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    logError('syncInventoryMovement failed', error as Error, 'syncInventoryMovement');
+    throw error;
+  }
+}
+
+// Sync a single currency configuration to Supabase
+async function syncConfiguracionCambiaria(config: ConfiguracionCambiaria): Promise<void> {
+  logInfo('Syncing currency configuration', 'syncConfiguracionCambiaria', { id: config.id });
+  
+  try {
+    const configData = {
+      local_id: config.id,
+      tasa_bcv: config.tasaBCV,
+      tasa_paralelo: config.tasaParalelo,
+      margen_global: config.margenGlobal,
+      fecha: config.fecha.toISOString(),
+      es_activa: config.esActiva,
+    };
+    
+    const { data, error } = await supabase
+      .from('configuracion_cambiaria')
+      .upsert(configData, { onConflict: 'local_id' })
+      .select()
+      .single();
+    
+    if (error) {
+      logError('Supabase error', error, 'syncConfiguracionCambiaria', { id: config.id });
+      throw new Error(`Supabase error: ${error.message}`);
+    }
+    
+    if (config.id) {
+      await db.configuracionCambiaria.update(config.id, {
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    
+    logInfo('Currency configuration synced successfully', 'syncConfiguracionCambiaria', { id: config.id });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    logError('syncConfiguracionCambiaria failed', error as Error, 'syncConfiguracionCambiaria');
+    throw error;
+  }
+}
+
+// Sync a single rate history to Supabase
+async function syncHistorialTasa(historial: HistorialTasa): Promise<void> {
+  logInfo('Syncing rate history', 'syncHistorialTasa', { id: historial.id, fecha: historial.fecha });
+  
+  try {
+    const historialData = {
+      local_id: historial.id,
+      tasa_bcv: historial.tasaBCV,
+      tasa_paralelo: historial.tasaParalelo,
+      brecha: historial.brecha,
+      fecha: historial.fecha.toISOString(),
+      hora: historial.hora,
+      fuente: historial.fuente,
+    };
+    
+    const { data, error } = await supabase
+      .from('historial_tasas')
+      .upsert(historialData, { onConflict: 'local_id' })
+      .select()
+      .single();
+    
+    if (error) {
+      logError('Supabase error', error, 'syncHistorialTasa', { id: historial.id });
+      throw new Error(`Supabase error: ${error.message}`);
+    }
+    
+    if (historial.id) {
+      await db.historialTasas.update(historial.id, {
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    
+    logInfo('Rate history synced successfully', 'syncHistorialTasa', { id: historial.id });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    logError('syncHistorialTasa failed', error as Error, 'syncHistorialTasa');
+    throw error;
+  }
+}
+
+// Sync a single price calculation to Supabase
+async function syncCalculoPrecio(calculo: CalculoPrecioVenezuela): Promise<void> {
+  logInfo('Syncing price calculation', 'syncCalculoPrecio', { id: calculo.id, productId: calculo.productId });
+  
+  try {
+    const calculoData = {
+      local_id: calculo.id,
+      product_id: calculo.productId,
+      config_id: calculo.configId,
+      costo_usd: calculo.costoUSD,
+      margen_porcentaje: calculo.margenPorcentaje,
+      tasa_bcv: calculo.tasaBCV,
+      tasa_paralelo: calculo.tasaParalelo,
+      precio_base_usd: calculo.precioBaseUSD,
+      factor_proteccion: calculo.factorProteccion,
+      brecha_cambiaria: calculo.brechaCambiaria,
+      precio_venta_usd: calculo.precioVentaUSD,
+      precio_venta_bs_protegido: calculo.precioVentaBsProtegido,
+      precio_venta_bs_sin_proteccion: calculo.precioVentaBsSinProteccion,
+      ganancia_esperada_usd: calculo.gananciaEsperadaUSD,
+      ganancia_real_usd: calculo.gananciaRealUSD,
+      ganancia_real_porcentaje: calculo.gananciaRealPorcentaje,
+      perdida_por_brecha_usd: calculo.perdidaPorBrechaUSD,
+      perdida_por_brecha_porcentaje: calculo.perdidaPorBrechaPorcentaje,
+      es_ganancia_baja: calculo.esGananciaBaja,
+      es_perdida: calculo.esPerdida,
+      fecha_calculo: calculo.fechaCalculo.toISOString(),
+    };
+    
+    const { data, error } = await supabase
+      .from('calculos_precios')
+      .upsert(calculoData, { onConflict: 'local_id' })
+      .select()
+      .single();
+    
+    if (error) {
+      logError('Supabase error', error, 'syncCalculoPrecio', { id: calculo.id });
+      throw new Error(`Supabase error: ${error.message}`);
+    }
+    
+    if (calculo.id) {
+      await db.calculosPrecios.update(calculo.id, {
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    
+    logInfo('Price calculation synced successfully', 'syncCalculoPrecio', { id: calculo.id });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    logError('syncCalculoPrecio failed', error as Error, 'syncCalculoPrecio');
+    throw error;
+  }
+}
+
 // Main sync function
 export async function syncPendingData(): Promise<{
   success: boolean;
@@ -593,6 +912,202 @@ export async function syncPendingData(): Promise<{
       }
     } catch (e) {
       logWarn('Could not sync sales goals history (table may not exist)', 'syncPendingData');
+    }
+
+    // Sync customers
+    try {
+      const pendingCustomers = await db.customers
+        .where('syncStatus')
+        .equals(SyncStatus.PENDING)
+        .toArray();
+
+      logInfo('Found pending customers', 'syncPendingData', { count: pendingCustomers.length });
+
+      for (const customer of pendingCustomers) {
+        try {
+          await syncCustomer(customer);
+          synced++;
+        } catch (error) {
+          failed++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Customer ${customer.name}: ${errorMsg}`);
+          await db.customers.update(customer.id!, {
+            syncStatus: SyncStatus.ERROR,
+            syncError: errorMsg,
+            updatedAt: new Date(),
+          });
+        }
+      }
+    } catch (e) {
+      logWarn('Could not sync customers (table may not exist)', 'syncPendingData');
+    }
+
+    // Sync payments
+    try {
+      const pendingPayments = await db.payments
+        .where('syncStatus')
+        .equals(SyncStatus.PENDING)
+        .toArray();
+
+      logInfo('Found pending payments', 'syncPendingData', { count: pendingPayments.length });
+
+      for (const payment of pendingPayments) {
+        try {
+          await syncPayment(payment);
+          synced++;
+        } catch (error) {
+          failed++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Payment ${payment.id}: ${errorMsg}`);
+          await db.payments.update(payment.id!, {
+            syncStatus: SyncStatus.ERROR,
+            syncError: errorMsg,
+            updatedAt: new Date(),
+          });
+        }
+      }
+    } catch (e) {
+      logWarn('Could not sync payments (table may not exist)', 'syncPendingData');
+    }
+
+    // Sync exchange rates
+    try {
+      const pendingRates = await db.exchangeRates
+        .where('syncStatus')
+        .equals(SyncStatus.PENDING)
+        .toArray();
+
+      logInfo('Found pending exchange rates', 'syncPendingData', { count: pendingRates.length });
+
+      for (const rate of pendingRates) {
+        try {
+          await syncExchangeRate(rate);
+          synced++;
+        } catch (error) {
+          failed++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Exchange Rate ${rate.id}: ${errorMsg}`);
+          await db.exchangeRates.update(rate.id!, {
+            syncStatus: SyncStatus.ERROR,
+            syncError: errorMsg,
+            updatedAt: new Date(),
+          });
+        }
+      }
+    } catch (e) {
+      logWarn('Could not sync exchange rates (table may not exist)', 'syncPendingData');
+    }
+
+    // Sync inventory movements
+    try {
+      const pendingMovements = await db.inventoryMovements
+        .where('syncStatus')
+        .equals(SyncStatus.PENDING)
+        .toArray();
+
+      logInfo('Found pending inventory movements', 'syncPendingData', { count: pendingMovements.length });
+
+      for (const movement of pendingMovements) {
+        try {
+          await syncInventoryMovement(movement);
+          synced++;
+        } catch (error) {
+          failed++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Inventory Movement ${movement.id}: ${errorMsg}`);
+          await db.inventoryMovements.update(movement.id!, {
+            syncStatus: SyncStatus.ERROR,
+            syncError: errorMsg,
+            updatedAt: new Date(),
+          });
+        }
+      }
+    } catch (e) {
+      logWarn('Could not sync inventory movements (table may not exist)', 'syncPendingData');
+    }
+
+    // Sync configuracion cambiaria
+    try {
+      const pendingConfigs = await db.configuracionCambiaria
+        .where('syncStatus')
+        .equals(SyncStatus.PENDING)
+        .toArray();
+
+      logInfo('Found pending currency configurations', 'syncPendingData', { count: pendingConfigs.length });
+
+      for (const config of pendingConfigs) {
+        try {
+          await syncConfiguracionCambiaria(config);
+          synced++;
+        } catch (error) {
+          failed++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Currency Config ${config.id}: ${errorMsg}`);
+          await db.configuracionCambiaria.update(config.id!, {
+            syncStatus: SyncStatus.ERROR,
+            syncError: errorMsg,
+            updatedAt: new Date(),
+          });
+        }
+      }
+    } catch (e) {
+      logWarn('Could not sync currency configurations (table may not exist)', 'syncPendingData');
+    }
+
+    // Sync historial tasas
+    try {
+      const pendingHistorial = await db.historialTasas
+        .where('syncStatus')
+        .equals(SyncStatus.PENDING)
+        .toArray();
+
+      logInfo('Found pending rate history', 'syncPendingData', { count: pendingHistorial.length });
+
+      for (const historial of pendingHistorial) {
+        try {
+          await syncHistorialTasa(historial);
+          synced++;
+        } catch (error) {
+          failed++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Rate History ${historial.id}: ${errorMsg}`);
+          await db.historialTasas.update(historial.id!, {
+            syncStatus: SyncStatus.ERROR,
+            syncError: errorMsg,
+            updatedAt: new Date(),
+          });
+        }
+      }
+    } catch (e) {
+      logWarn('Could not sync rate history (table may not exist)', 'syncPendingData');
+    }
+
+    // Sync calculos precios
+    try {
+      const pendingCalculos = await db.calculosPrecios
+        .where('syncStatus')
+        .equals(SyncStatus.PENDING)
+        .toArray();
+
+      logInfo('Found pending price calculations', 'syncPendingData', { count: pendingCalculos.length });
+
+      for (const calculo of pendingCalculos) {
+        try {
+          await syncCalculoPrecio(calculo);
+          synced++;
+        } catch (error) {
+          failed++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Price Calculation ${calculo.id}: ${errorMsg}`);
+          await db.calculosPrecios.update(calculo.id!, {
+            syncStatus: SyncStatus.ERROR,
+            syncError: errorMsg,
+            updatedAt: new Date(),
+          });
+        }
+      }
+    } catch (e) {
+      logWarn('Could not sync price calculations (table may not exist)', 'syncPendingData');
     }
 
     syncEvents.emit('sync-complete', { synced, failed, errors });

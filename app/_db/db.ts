@@ -98,7 +98,7 @@ export interface ConfiguracionCambiaria extends Syncable {
   esActiva: boolean;         // Si es la configuración actual
 }
 
-export interface HistorialTasa {
+export interface HistorialTasa extends Syncable {
   id?: number;
   tasaBCV: number;
   tasaParalelo: number;
@@ -106,10 +106,9 @@ export interface HistorialTasa {
   fecha: Date;
   hora: string;              // HH:MM
   fuente?: string;
-  createdAt: Date;
 }
 
-export interface CalculoPrecioVenezuela {
+export interface CalculoPrecioVenezuela extends Syncable {
   id?: number;
   productId: number;
   configId: number;
@@ -185,7 +184,7 @@ export interface HistorialVentasMeta extends Syncable {
 }
 
 // Inventory movement tracking
-export interface InventoryMovement {
+export interface InventoryMovement extends Syncable {
   id?: number;
   productId: number;
   productSku: string;
@@ -197,7 +196,6 @@ export interface InventoryMovement {
   referenceId?: number; // Sale ID, Purchase ID, etc.
   notes?: string;
   createdBy?: string;
-  createdAt: Date;
 }
 
 export class LubriMotosDB extends Dexie {
@@ -263,12 +261,12 @@ export class LubriMotosDB extends Dexie {
       saleItems: '++id, saleId, productId, syncStatus, lastSyncAt',
       payments: '++id, saleId, syncStatus, lastSyncAt',
       exchangeRates: '++id, recordedAt',
-      inventoryMovements: '++id, productId, type, createdAt',
+      inventoryMovements: '++id, productId, type, syncStatus, createdAt',
       syncQueue: '++id, tableName, createdAt',
       // New tables
-      configuracionCambiaria: '++id, fecha, esActiva, updatedAt',
-      historialTasas: '++id, fecha, hora, createdAt',
-      calculosPrecios: '++id, productId, configId, fechaCalculo, createdAt',
+      configuracionCambiaria: '++id, fecha, esActiva, syncStatus, updatedAt',
+      historialTasas: '++id, fecha, hora, syncStatus, createdAt',
+      calculosPrecios: '++id, productId, configId, syncStatus, fechaCalculo, createdAt',
     });
     
     // Version 7 - Add tables for break-even point and goals
@@ -279,11 +277,11 @@ export class LubriMotosDB extends Dexie {
       saleItems: '++id, saleId, productId, syncStatus, lastSyncAt',
       payments: '++id, saleId, syncStatus, lastSyncAt',
       exchangeRates: '++id, recordedAt',
-      inventoryMovements: '++id, productId, type, createdAt',
+      inventoryMovements: '++id, productId, type, syncStatus, createdAt',
       syncQueue: '++id, tableName, createdAt',
-      configuracionCambiaria: '++id, fecha, esActiva, updatedAt',
-      historialTasas: '++id, fecha, hora, createdAt',
-      calculosPrecios: '++id, productId, configId, fechaCalculo, createdAt',
+      configuracionCambiaria: '++id, fecha, esActiva, syncStatus, updatedAt',
+      historialTasas: '++id, fecha, hora, syncStatus, createdAt',
+      calculosPrecios: '++id, productId, configId, syncStatus, fechaCalculo, createdAt',
       // Break-even and goals tables
       gastosFijos: '++id, nombre, syncStatus, updatedAt, lastSyncAt',
       configuracionMetas: '++id, mes, año, syncStatus, updatedAt, lastSyncAt',
@@ -354,6 +352,7 @@ export async function recordInventoryMovement(
     notes,
     createdBy,
     createdAt: new Date(),
+    updatedAt: new Date(),
   });
 }
 

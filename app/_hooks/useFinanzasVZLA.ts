@@ -305,6 +305,7 @@ export function useFinanzasVZLA() {
       hora: now.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }),
       fuente,
       createdAt: now,
+      updatedAt: now,
     });
     
     return id;
@@ -342,6 +343,7 @@ export function useFinanzasVZLA() {
       esPerdida: calculo.esPerdida,
       fechaCalculo: now,
       createdAt: now,
+      updatedAt: now,
     });
     
     return id;

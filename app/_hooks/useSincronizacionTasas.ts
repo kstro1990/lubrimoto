@@ -62,6 +62,7 @@ export function useSincronizacionTasas() {
         }),
         fuente: desdeCache ? 'Cache' : 'DolarApi',
         createdAt: new Date(),
+        updatedAt: new Date(),
       });
 
       setProgreso(100);

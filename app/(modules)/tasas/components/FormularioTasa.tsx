@@ -73,6 +73,7 @@ export default function FormularioTasa({ tasa, onClose, onSuccess }: FormularioT
         hora: formData.hora,
         fuente: formData.fuente || 'Manual',
         createdAt: new Date(),
+        updatedAt: new Date(),
       };
       
       if (tasa?.id) {
