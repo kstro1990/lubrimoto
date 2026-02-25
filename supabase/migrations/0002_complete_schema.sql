@@ -2,7 +2,7 @@
 -- Migration: 0002_complete_schema.sql
 
 -- ============================================
--- EXISTING TABLES - Add local_id columns
+-- EXISTING TABLES - Add local_id columns with UNIQUE
 -- ============================================
 
 -- Add local_id to sales (if not exists)
@@ -12,7 +12,7 @@ BEGIN
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'sales' AND column_name = 'local_id'
     ) THEN
-        ALTER TABLE sales ADD COLUMN local_id INTEGER;
+        ALTER TABLE sales ADD COLUMN local_id INTEGER UNIQUE;
     END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS idx_sales_local_id ON sales(local_id);
@@ -24,7 +24,7 @@ BEGIN
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'products' AND column_name = 'local_id'
     ) THEN
-        ALTER TABLE products ADD COLUMN local_id INTEGER;
+        ALTER TABLE products ADD COLUMN local_id INTEGER UNIQUE;
     END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS idx_products_local_id ON products(local_id);
@@ -36,7 +36,7 @@ BEGIN
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'sale_items' AND column_name = 'local_id'
     ) THEN
-        ALTER TABLE sale_items ADD COLUMN local_id INTEGER;
+        ALTER TABLE sale_items ADD COLUMN local_id INTEGER UNIQUE;
     END IF;
 END $$;
 
@@ -47,7 +47,7 @@ BEGIN
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'payments' AND column_name = 'local_id'
     ) THEN
-        ALTER TABLE payments ADD COLUMN local_id INTEGER;
+        ALTER TABLE payments ADD COLUMN local_id INTEGER UNIQUE;
     END IF;
 END $$;
 
@@ -58,7 +58,7 @@ BEGIN
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'exchange_rates' AND column_name = 'local_id'
     ) THEN
-        ALTER TABLE exchange_rates ADD COLUMN local_id INTEGER;
+        ALTER TABLE exchange_rates ADD COLUMN local_id INTEGER UNIQUE;
     END IF;
 END $$;
 
@@ -69,7 +69,7 @@ END $$;
 -- Fixed Expenses (Gastos Fijos)
 CREATE TABLE IF NOT EXISTS fixed_expenses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    local_id INTEGER,
+    local_id INTEGER UNIQUE,
     name TEXT NOT NULL,
     amount_usd DECIMAL(12, 2) NOT NULL,
     category TEXT NOT NULL DEFAULT 'fijo',
@@ -86,7 +86,7 @@ CREATE INDEX IF NOT EXISTS idx_fixed_expenses_local_id ON fixed_expenses(local_i
 -- Goals Configuration (Configuración de Metas)
 CREATE TABLE IF NOT EXISTS goals_configuration (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    local_id INTEGER,
+    local_id INTEGER UNIQUE,
     month INTEGER NOT NULL,
     year INTEGER NOT NULL,
     desired_profit_usd DECIMAL(12, 2) NOT NULL,
@@ -105,7 +105,7 @@ CREATE INDEX IF NOT EXISTS idx_goals_configuration_local_id ON goals_configurati
 -- Sales Goals History (Historial de Ventas vs Metas)
 CREATE TABLE IF NOT EXISTS sales_goals_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    local_id INTEGER,
+    local_id INTEGER UNIQUE,
     month INTEGER NOT NULL,
     year INTEGER NOT NULL,
     total_sales_usd DECIMAL(12, 2) NOT NULL,
@@ -126,7 +126,7 @@ CREATE INDEX IF NOT EXISTS idx_sales_goals_history_local_id ON sales_goals_histo
 
 CREATE TABLE IF NOT EXISTS customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    local_id INTEGER,
+    local_id INTEGER UNIQUE,
     name TEXT NOT NULL,
     email TEXT,
     phone TEXT,
@@ -144,7 +144,7 @@ CREATE INDEX IF NOT EXISTS idx_customers_local_id ON customers(local_id);
 -- Currency Configuration (Configuración Cambiaria)
 CREATE TABLE IF NOT EXISTS configuracion_cambiaria (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    local_id INTEGER,
+    local_id INTEGER UNIQUE,
     tasa_bcv DECIMAL(14, 4) NOT NULL,
     tasa_paralelo DECIMAL(14, 4) NOT NULL,
     margen_global DECIMAL(5, 2) NOT NULL,
@@ -156,25 +156,11 @@ CREATE TABLE IF NOT EXISTS configuracion_cambiaria (
 ALTER TABLE configuracion_cambiaria REPLICA IDENTITY FULL;
 CREATE INDEX IF NOT EXISTS idx_configuracion_cambiaria_local_id ON configuracion_cambiaria(local_id);
 
--- Rate History (Historial de Tasas)
-CREATE TABLE IF NOT EXISTS historial_tasas (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    local_id INTEGER,
-    tasa_bcv DECIMAL(14, 4) NOT NULL,
-    tasa_paralelo DECIMAL(14, 4) NOT NULL,
-    brecha DECIMAL(5, 2) NOT NULL,
-    fecha DATE NOT NULL,
-    hora TEXT NOT NULL,
-    fuente TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-ALTER TABLE historial_tasas REPLICA IDENTITY FULL;
-CREATE INDEX IF NOT EXISTS idx_historial_tasas_local_id ON historial_tasas(local_id);
-
+-- Rate History (Historial de Tasas) - YA CORREGIDO ARRIBA
 -- Price Calculations (Cálculos de Precios)
 CREATE TABLE IF NOT EXISTS calculos_precios (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    local_id INTEGER,
+    local_id INTEGER UNIQUE,
     product_id INTEGER,
     config_id INTEGER,
     costo_usd DECIMAL(12, 2) NOT NULL,
@@ -207,7 +193,7 @@ CREATE INDEX IF NOT EXISTS idx_calculos_precios_product_id ON calculos_precios(p
 
 CREATE TABLE IF NOT EXISTS inventory_movements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    local_id INTEGER,
+    local_id INTEGER UNIQUE,
     product_id INTEGER NOT NULL,
     product_sku TEXT NOT NULL,
     product_name TEXT NOT NULL,
