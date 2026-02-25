@@ -4,12 +4,48 @@ import { useState, useEffect } from 'react';
 import { db, SyncStatus } from '@/app/_db/db';
 import { bidirectionalSync, getSyncStats, detectDuplicateSales, getDetailedSyncStatus } from '@/app/_lib/sync';
 
+interface TableStats {
+  local: number;
+  synced: number;
+  pending: number;
+  error: number;
+}
+
+interface FullDbStats {
+  products: TableStats;
+  sales: TableStats;
+  saleItems: TableStats;
+  payments: TableStats;
+  customers: TableStats;
+  exchangeRates: TableStats;
+  inventoryMovements: TableStats;
+  gastosFijos: TableStats;
+  configuracionMetas: TableStats;
+  historialVentasMeta: TableStats;
+  configuracionCambiaria: TableStats;
+  historialTasas: TableStats;
+  calculosPrecios: TableStats;
+}
+
+interface CloudCounts {
+  products: number;
+  sales: number;
+  fixedExpenses: number;
+  goalsConfiguration: number;
+  salesGoalsHistory: number;
+  customers: number;
+  exchangeRates: number;
+}
+
 export default function DiagnosticoPage() {
   const [logs, setLogs] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [dbStats, setDbStats] = useState({ products: 0, sales: 0, pending: 0 });
   const [duplicates, setDuplicates] = useState<Array<{ id: string; total: number; created_at: string }>>([]);
   const [cloudStats, setCloudStats] = useState({ products: 0, sales: 0 });
+  const [fullDbStats, setFullDbStats] = useState<FullDbStats | null>(null);
+  const [cloudCounts, setCloudCounts] = useState<CloudCounts | null>(null);
+  const [showFullDb, setShowFullDb] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -20,6 +56,96 @@ export default function DiagnosticoPage() {
     const sales = await db.sales.count();
     const stats = await getSyncStats();
     setDbStats({ products, sales, pending: stats.totalPending });
+  }
+
+  async function loadFullDatabaseStats() {
+    setIsRunning(true);
+    try {
+      addLog('📊 Cargando estadísticas completas de la base de datos...');
+      
+      const getTableStats = async (table: any): Promise<TableStats> => {
+        const all = await table.toArray();
+        return {
+          local: all.length,
+          synced: all.filter((r: any) => r.syncStatus === SyncStatus.SYNCED).length,
+          pending: all.filter((r: any) => r.syncStatus === SyncStatus.PENDING).length,
+          error: all.filter((r: any) => r.syncStatus === SyncStatus.ERROR).length,
+        };
+      };
+
+      const stats: FullDbStats = {
+        products: await getTableStats(db.products),
+        sales: await getTableStats(db.sales),
+        saleItems: await getTableStats(db.saleItems),
+        payments: await getTableStats(db.payments),
+        customers: await getTableStats(db.customers),
+        exchangeRates: await getTableStats(db.exchangeRates),
+        inventoryMovements: await getTableStats(db.inventoryMovements),
+        gastosFijos: await getTableStats(db.gastosFijos),
+        configuracionMetas: await getTableStats(db.configuracionMetas),
+        historialVentasMeta: await getTableStats(db.historialVentasMeta),
+        configuracionCambiaria: await getTableStats(db.configuracionCambiaria),
+        historialTasas: await getTableStats(db.historialTasas),
+        calculosPrecios: await getTableStats(db.calculosPrecios),
+      };
+
+      setFullDbStats(stats);
+      addLog('✅ Estadísticas locales cargadas');
+
+      // Cargar datos de la nube
+      addLog('☁️ Cargando datos de Supabase...');
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const [productsRes, salesRes, expensesRes, goalsRes, historyRes, customersRes, ratesRes] = await Promise.all([
+        supabase.from('products').select('*', { count: 'exact', head: true }),
+        supabase.from('sales').select('*', { count: 'exact', head: true }),
+        supabase.from('fixed_expenses').select('*', { count: 'exact', head: true }),
+        supabase.from('goals_configuration').select('*', { count: 'exact', head: true }),
+        supabase.from('sales_goals_history').select('*', { count: 'exact', head: true }),
+        supabase.from('customers').select('*', { count: 'exact', head: true }),
+        supabase.from('exchange_rates').select('*', { count: 'exact', head: true }),
+      ]);
+
+      const cloud: CloudCounts = {
+        products: productsRes.count || 0,
+        sales: salesRes.count || 0,
+        fixedExpenses: expensesRes.count || 0,
+        goalsConfiguration: goalsRes.count || 0,
+        salesGoalsHistory: historyRes.count || 0,
+        customers: customersRes.count || 0,
+        exchangeRates: ratesRes.count || 0,
+      };
+
+      setCloudCounts(cloud);
+      setShowFullDb(true);
+      addLog('✅ Datos de Supabase cargados');
+
+      // Mostrar resumen
+      addLog('=== RESUMEN BASE DE DATOS ===');
+      addLog(`📦 Products:   Local=${stats.products.local} | Cloud=${cloud.products} | ✅${stats.products.synced} ⏳${stats.products.pending}`);
+      addLog(`💰 Sales:      Local=${stats.sales.local} | Cloud=${cloud.sales} | ✅${stats.sales.synced} ⏳${stats.sales.pending}`);
+      addLog(`📝 SaleItems:  Local=${stats.saleItems.local}`);
+      addLog(`💳 Payments:   Local=${stats.payments.local}`);
+      addLog(`👥 Customers:  Local=${stats.customers.local} | Cloud=${cloud.customers}`);
+      addLog(`💵 Exchange:   Local=${stats.exchangeRates.local} | Cloud=${cloud.exchangeRates}`);
+      addLog(`📈 Movements:  Local=${stats.inventoryMovements.local}`);
+      addLog(`🏠 FixedExp:   Local=${stats.gastosFijos.local} | Cloud=${cloud.fixedExpenses} | ✅${stats.gastosFijos.synced}`);
+      addLog(`🎯 GoalsConf:  Local=${stats.configuracionMetas.local} | Cloud=${cloud.goalsConfiguration} | ✅${stats.configuracionMetas.synced}`);
+      addLog(`📊 GoalsHist:  Local=${stats.historialVentasMeta.local} | Cloud=${cloud.salesGoalsHistory} | ✅${stats.historialVentasMeta.synced}`);
+      addLog(`💱 Cambiaria:  Local=${stats.configuracionCambiaria.local}`);
+      addLog(`📜 Tasas:      Local=${stats.historialTasas.local}`);
+      addLog(`🧮 Precios:    Local=${stats.calculosPrecios.local}`);
+
+    } catch (err: any) {
+      addLog(`❌ Error: ${err.message}`);
+      console.error('Full DB stats error:', err);
+    } finally {
+      setIsRunning(false);
+    }
   }
 
   async function checkDuplicates() {
@@ -425,6 +551,14 @@ export default function DiagnosticoPage() {
             🔍 Buscar Duplicados
           </button>
         </div>
+
+        <button
+          onClick={loadFullDatabaseStats}
+          disabled={isRunning}
+          className="w-full bg-indigo-600 text-white py-3 px-6 rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-semibold"
+        >
+          🗄️ Ver Toda la Base de Datos
+        </button>
         
         <div className="grid grid-cols-2 gap-3">
           <button
@@ -443,6 +577,160 @@ export default function DiagnosticoPage() {
           </button>
         </div>
       </div>
+
+      {showFullDb && fullDbStats && cloudCounts && (
+        <div className="bg-white border border-gray-200 rounded-lg mb-6 overflow-hidden">
+          <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
+            <h3 className="font-semibold text-gray-800">📊 Estado Completo de la Base de Datos</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600">Tabla</th>
+                  <th className="px-4 py-2 text-center font-medium text-gray-600">Local</th>
+                  <th className="px-4 py-2 text-center font-medium text-gray-600">Nube</th>
+                  <th className="px-4 py-2 text-center font-medium text-green-600">✅ Sync</th>
+                  <th className="px-4 py-2 text-center font-medium text-yellow-600">⏳ Pend</th>
+                  <th className="px-4 py-2 text-center font-medium text-red-600">❌ Error</th>
+                  <th className="px-4 py-2 text-center font-medium text-gray-600">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                <tr className={fullDbStats.products.local !== cloudCounts.products ? 'bg-yellow-50' : ''}>
+                  <td className="px-4 py-2 font-medium">Products</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.products.local}</td>
+                  <td className="px-4 py-2 text-center">{cloudCounts.products}</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.products.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.products.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.products.error}</td>
+                  <td className="px-4 py-2 text-center">
+                    {fullDbStats.products.local === cloudCounts.products ? '✅' : '⚠️'}
+                  </td>
+                </tr>
+                <tr className={fullDbStats.sales.local !== cloudCounts.sales ? 'bg-yellow-50' : ''}>
+                  <td className="px-4 py-2 font-medium">Sales</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.sales.local}</td>
+                  <td className="px-4 py-2 text-center">{cloudCounts.sales}</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.sales.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.sales.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.sales.error}</td>
+                  <td className="px-4 py-2 text-center">
+                    {fullDbStats.sales.local === cloudCounts.sales ? '✅' : '⚠️'}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-2 font-medium">Sale Items</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.saleItems.local}</td>
+                  <td className="px-4 py-2 text-center">-</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.saleItems.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.saleItems.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.saleItems.error}</td>
+                  <td className="px-4 py-2 text-center">-</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-2 font-medium">Payments</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.payments.local}</td>
+                  <td className="px-4 py-2 text-center">-</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.payments.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.payments.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.payments.error}</td>
+                  <td className="px-4 py-2 text-center">-</td>
+                </tr>
+                <tr className={fullDbStats.customers.local > 0 && cloudCounts.customers === 0 ? 'bg-yellow-50' : ''}>
+                  <td className="px-4 py-2 font-medium">Customers</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.customers.local}</td>
+                  <td className="px-4 py-2 text-center">{cloudCounts.customers}</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.customers.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.customers.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.customers.error}</td>
+                  <td className="px-4 py-2 text-center">
+                    {fullDbStats.customers.local === 0 ? '✅' : fullDbStats.customers.local === cloudCounts.customers ? '✅' : '❌'}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-2 font-medium">Exchange Rates</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.exchangeRates.local}</td>
+                  <td className="px-4 py-2 text-center">{cloudCounts.exchangeRates}</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.exchangeRates.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.exchangeRates.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.exchangeRates.error}</td>
+                  <td className="px-4 py-2 text-center">-</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-2 font-medium">Inventory Movements</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.inventoryMovements.local}</td>
+                  <td className="px-4 py-2 text-center">-</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.inventoryMovements.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.inventoryMovements.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.inventoryMovements.error}</td>
+                  <td className="px-4 py-2 text-center">-</td>
+                </tr>
+                <tr className={fullDbStats.gastosFijos.local !== cloudCounts.fixedExpenses ? 'bg-yellow-50' : ''}>
+                  <td className="px-4 py-2 font-medium">Fixed Expenses</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.gastosFijos.local}</td>
+                  <td className="px-4 py-2 text-center">{cloudCounts.fixedExpenses}</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.gastosFijos.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.gastosFijos.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.gastosFijos.error}</td>
+                  <td className="px-4 py-2 text-center">
+                    {fullDbStats.gastosFijos.local === cloudCounts.fixedExpenses ? '✅' : '⚠️'}
+                  </td>
+                </tr>
+                <tr className={fullDbStats.configuracionMetas.local !== cloudCounts.goalsConfiguration ? 'bg-yellow-50' : ''}>
+                  <td className="px-4 py-2 font-medium">Goals Configuration</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.configuracionMetas.local}</td>
+                  <td className="px-4 py-2 text-center">{cloudCounts.goalsConfiguration}</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.configuracionMetas.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.configuracionMetas.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.configuracionMetas.error}</td>
+                  <td className="px-4 py-2 text-center">
+                    {fullDbStats.configuracionMetas.local === cloudCounts.goalsConfiguration ? '✅' : '⚠️'}
+                  </td>
+                </tr>
+                <tr className={fullDbStats.historialVentasMeta.local !== cloudCounts.salesGoalsHistory ? 'bg-yellow-50' : ''}>
+                  <td className="px-4 py-2 font-medium">Sales Goals History</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.historialVentasMeta.local}</td>
+                  <td className="px-4 py-2 text-center">{cloudCounts.salesGoalsHistory}</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.historialVentasMeta.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.historialVentasMeta.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.historialVentasMeta.error}</td>
+                  <td className="px-4 py-2 text-center">
+                    {fullDbStats.historialVentasMeta.local === cloudCounts.salesGoalsHistory ? '✅' : '⚠️'}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-2 font-medium">Config. Cambiaria</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.configuracionCambiaria.local}</td>
+                  <td className="px-4 py-2 text-center">-</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.configuracionCambiaria.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.configuracionCambiaria.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.configuracionCambiaria.error}</td>
+                  <td className="px-4 py-2 text-center">❌</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-2 font-medium">Historial Tasas</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.historialTasas.local}</td>
+                  <td className="px-4 py-2 text-center">-</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.historialTasas.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.historialTasas.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.historialTasas.error}</td>
+                  <td className="px-4 py-2 text-center">❌</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-2 font-medium">Cálculos Precios</td>
+                  <td className="px-4 py-2 text-center">{fullDbStats.calculosPrecios.local}</td>
+                  <td className="px-4 py-2 text-center">-</td>
+                  <td className="px-4 py-2 text-center text-green-600">{fullDbStats.calculosPrecios.synced}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{fullDbStats.calculosPrecios.pending}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{fullDbStats.calculosPrecios.error}</td>
+                  <td className="px-4 py-2 text-center">❌</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm h-96 overflow-y-auto">
         <h3 className="text-white font-semibold mb-2">📋 Log de Eventos:</h3>
