@@ -196,25 +196,19 @@ export default function SaleTerminal() {
         5000
       );
 
-      // Sincronizar automáticamente con Supabase
-      try {
-        const syncResult = await syncPendingData();
-        if (syncResult.synced > 0) {
-          success(
-            'Sincronización Exitosa',
-            `${syncResult.synced} registro(s) sincronizado(s) con la nube`,
-            4000
-          );
-        } else if (!syncResult.success && syncResult.errors.length > 0) {
-          showError(
-            'Error de Sincronización',
-            syncResult.errors[0],
-            6000
-          );
-        }
-      } catch (syncErr) {
-        logError('Error en sincronización automática', syncErr as Error, 'SaleTerminal');
-      }
+      // Sincronizar automáticamente con Supabase (no bloquea la venta)
+      syncPendingData()
+        .then((syncResult) => {
+          if (syncResult.synced > 0) {
+            logInfo('Sync after sale', 'SaleTerminal', { synced: syncResult.synced });
+          }
+          if (!syncResult.success && syncResult.errors.length > 0) {
+            logWarn('Sync after sale had errors', 'SaleTerminal', { errors: syncResult.errors });
+          }
+        })
+        .catch((syncErr) => {
+          logWarn('Sync after sale failed, will retry later', 'SaleTerminal', { error: String(syncErr) });
+        });
 
       setCart([]);
       setCustomer({ name: '', email: '' });
