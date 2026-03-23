@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import db, { SyncStatus, Product, Sale, SaleItem, Customer } from '../_db/db';
+import db, { SyncStatus, Product, Sale, SaleItem, Customer, Payment } from '../_db/db';
 import { logInfo, logError, logWarn } from './logger';
 
 // Simple event emitter for sync status
@@ -42,6 +42,115 @@ export function setupNetworkListeners() {
   window.addEventListener('offline', () => {
     syncEvents.emit('offline');
   });
+}
+
+// Transform local customer to Supabase format
+function transformCustomerToSupabase(customer: Customer): Record<string, unknown> {
+  return {
+    name: customer.name,
+    email: customer.email || null,
+    phone: customer.phone || null,
+    address: customer.address || null,
+  };
+}
+
+// Transform Supabase customer to local format
+function transformCustomerFromSupabase(data: Record<string, unknown>): Omit<Customer, 'id'> {
+  return {
+    localId: data.id as string,
+    name: data.name as string,
+    email: (data.email as string) || undefined,
+    phone: (data.phone as string) || undefined,
+    address: (data.address as string) || undefined,
+    syncStatus: SyncStatus.SYNCED,
+    lastSyncAt: new Date(),
+    createdAt: new Date((data.created_at as string) || Date.now()),
+    updatedAt: new Date((data.updated_at as string) || Date.now()),
+  };
+}
+
+// Sync a single customer to Supabase
+async function syncCustomer(customer: Customer): Promise<void> {
+  logInfo('Syncing customer', 'syncCustomer', { name: customer.name, id: customer.id });
+
+  try {
+    const customerData = transformCustomerToSupabase(customer);
+
+    // If already synced (has localId), update instead of insert
+    if (customer.localId) {
+      const { error } = await supabase
+        .from('customers')
+        .update(customerData)
+        .eq('id', customer.localId);
+
+      if (error) {
+        logError('Failed to update customer in Supabase', error, 'syncCustomer', { name: customer.name });
+        throw new Error(`Supabase update error: ${error.message}`);
+      }
+
+      if (customer.id) {
+        await db.customers.update(customer.id, {
+          syncStatus: SyncStatus.SYNCED,
+          lastSyncAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+
+      logInfo('Customer updated in Supabase', 'syncCustomer', { name: customer.name });
+      return;
+    }
+
+    // Try to find existing customer by name in Supabase
+    const { data: existing } = await supabase
+      .from('customers')
+      .select('id')
+      .ilike('name', customer.name)
+      .maybeSingle();
+
+    if (existing) {
+      // Customer already exists in Supabase, link and update
+      if (customer.id) {
+        await db.customers.update(customer.id, {
+          localId: existing.id,
+          syncStatus: SyncStatus.SYNCED,
+          lastSyncAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+      logInfo('Customer already exists in Supabase, linked', 'syncCustomer', { name: customer.name, supabaseId: existing.id });
+      return;
+    }
+
+    // Insert new customer
+    const { data, error } = await supabase
+      .from('customers')
+      .insert(customerData)
+      .select()
+      .single();
+
+    if (error) {
+      logError('Failed to insert customer', error, 'syncCustomer', { name: customer.name });
+      throw new Error(`Supabase insert error: ${error.message}`);
+    }
+
+    if (!data || !customer.id) {
+      throw new Error('No data returned from Supabase or missing local ID');
+    }
+
+    // Update local record with Supabase ID
+    await db.customers.update(customer.id, {
+      localId: data.id,
+      syncStatus: SyncStatus.SYNCED,
+      lastSyncAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    logInfo('Customer synced successfully', 'syncCustomer', { name: customer.name, supabaseId: data.id });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    logError('syncCustomer failed', error as Error, 'syncCustomer', { name: customer.name });
+    throw new Error(`syncCustomer failed: ${errMsg}`);
+  }
 }
 
 // Transform local product to Supabase format
@@ -192,17 +301,40 @@ async function syncSale(sale: Sale): Promise<void> {
   const items = await db.saleItems.where('saleId').equals(sale.id!).toArray();
   logInfo(`Found ${items.length} items for sale`, 'syncSale', { saleId: sale.id });
   
+  // Resolve customer Supabase ID if sale has a customer
+  let supabaseCustomerId: string | null = null;
+  if (sale.customerId) {
+    const localCustomer = await db.customers.get(sale.customerId);
+    if (localCustomer?.localId) {
+      supabaseCustomerId = localCustomer.localId;
+    } else if (localCustomer) {
+      // Customer not yet synced, sync it first
+      try {
+        await syncCustomer(localCustomer);
+        const refreshed = await db.customers.get(sale.customerId);
+        supabaseCustomerId = refreshed?.localId || null;
+      } catch (custErr) {
+        logWarn('Could not sync customer before sale', 'syncSale', { customerId: sale.customerId });
+      }
+    }
+  }
+
   // First sync the sale
+  const saleInsert: Record<string, unknown> = {
+    subtotal_usd: sale.subtotalUsd,
+    iva_amount_usd: sale.ivaAmountUsd,
+    igtf_amount_usd: sale.igtfAmountUsd,
+    total_amount_usd: sale.totalAmountUsd,
+    exchange_rate_ves: sale.exchangeRateVes,
+    total_amount_ves: sale.totalAmountVes,
+  };
+  if (supabaseCustomerId) {
+    saleInsert.customer_id = supabaseCustomerId;
+  }
+
   const { data: saleData, error: saleError } = await supabase
     .from('sales')
-    .insert({
-      subtotal_usd: sale.subtotalUsd,
-      iva_amount_usd: sale.ivaAmountUsd,
-      igtf_amount_usd: sale.igtfAmountUsd,
-      total_amount_usd: sale.totalAmountUsd,
-      exchange_rate_ves: sale.exchangeRateVes,
-      total_amount_ves: sale.totalAmountVes,
-    })
+    .insert(saleInsert)
     .select()
     .single();
 
@@ -292,8 +424,29 @@ async function syncSale(sale: Sale): Promise<void> {
     logInfo('Sale items inserted', 'syncSale', { saleId: sale.id, itemCount: saleItemsData.length });
   }
 
+  // Sync payments for this sale
+  const payments = await db.payments.where('saleId').equals(sale.id!).toArray();
+  if (payments.length > 0) {
+    const paymentsData = payments.map(p => ({
+      sale_id: saleData.id,
+      method: p.method,
+      amount: p.amount,
+      reference_code: p.referenceCode || null,
+    }));
+
+    const { error: paymentsError } = await supabase
+      .from('payments')
+      .insert(paymentsData);
+
+    if (paymentsError) {
+      logWarn('Failed to insert payments', 'syncSale', { saleId: sale.id, error: paymentsError.message });
+    } else {
+      logInfo('Payments inserted', 'syncSale', { saleId: sale.id, count: paymentsData.length });
+    }
+  }
+
   // Update local records using transaction
-  await db.transaction('rw', [db.sales, db.saleItems], async () => {
+  await db.transaction('rw', [db.sales, db.saleItems, db.payments], async () => {
     // Update sale
     await db.sales.update(sale.id!, {
       syncStatus: SyncStatus.SYNCED,
@@ -310,6 +463,17 @@ async function syncSale(sale: Sale): Promise<void> {
         localId: saleData.id,
         updatedAt: new Date(),
       });
+    }
+
+    // Update payments
+    for (const payment of payments) {
+      if (payment.id) {
+        await db.payments.update(payment.id, {
+          syncStatus: SyncStatus.SYNCED,
+          lastSyncAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
     }
   });
   
@@ -362,6 +526,32 @@ export async function syncPendingData(): Promise<{
           syncError: errorMsg,
           updatedAt: new Date(),
         });
+      }
+    }
+
+    // Sync customers (before sales, so customer_id is available)
+    const pendingCustomers = await db.customers
+      .where('syncStatus')
+      .equals(SyncStatus.PENDING)
+      .toArray();
+
+    logInfo('Found pending customers', 'syncPendingData', { count: pendingCustomers.length });
+
+    for (const customer of pendingCustomers) {
+      try {
+        await syncCustomer(customer);
+        synced++;
+      } catch (error) {
+        failed++;
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        errors.push(`Customer ${customer.name}: ${errorMsg}`);
+        if (customer.id) {
+          await db.customers.update(customer.id, {
+            syncStatus: SyncStatus.ERROR,
+            syncError: errorMsg,
+            updatedAt: new Date(),
+          });
+        }
       }
     }
 
@@ -419,12 +609,18 @@ export async function syncPendingData(): Promise<{
 // Get sync statistics
 export async function getSyncStats(): Promise<{
   pendingProducts: number;
+  pendingCustomers: number;
   pendingSales: number;
   totalPending: number;
   lastSync: Date | null;
 }> {
   try {
     const pendingProducts = await db.products
+      .where('syncStatus')
+      .equals(SyncStatus.PENDING)
+      .count();
+
+    const pendingCustomers = await db.customers
       .where('syncStatus')
       .equals(SyncStatus.PENDING)
       .count();
@@ -455,14 +651,16 @@ export async function getSyncStats(): Promise<{
 
     return {
       pendingProducts,
+      pendingCustomers,
       pendingSales,
-      totalPending: pendingProducts + pendingSales,
+      totalPending: pendingProducts + pendingCustomers + pendingSales,
       lastSync,
     };
   } catch (error) {
     logError('Error getting sync stats', error as Error, 'getSyncStats');
     return {
       pendingProducts: 0,
+      pendingCustomers: 0,
       pendingSales: 0,
       totalPending: 0,
       lastSync: null,
@@ -663,10 +861,12 @@ export async function detectDuplicateSales(): Promise<{
 export async function getDetailedSyncStatus(): Promise<{
   local: {
     products: { total: number; synced: number; pending: number; error: number };
+    customers: { total: number; synced: number; pending: number; error: number };
     sales: { total: number; synced: number; pending: number; error: number };
   };
   cloud: {
     products: number;
+    customers: number;
     sales: number;
   };
   duplicates: {
@@ -677,17 +877,24 @@ export async function getDetailedSyncStatus(): Promise<{
   
   try {
     // Local stats
-    const [localProducts, localSales] = await Promise.all([
+    const [localProducts, localCustomers, localSales] = await Promise.all([
       db.products.toArray(),
+      db.customers.toArray(),
       db.sales.toArray(),
     ]);
-    
+
     const localStats = {
       products: {
         total: localProducts.length,
         synced: localProducts.filter(p => p.syncStatus === SyncStatus.SYNCED).length,
         pending: localProducts.filter(p => p.syncStatus === SyncStatus.PENDING).length,
         error: localProducts.filter(p => p.syncStatus === SyncStatus.ERROR).length,
+      },
+      customers: {
+        total: localCustomers.length,
+        synced: localCustomers.filter(c => c.syncStatus === SyncStatus.SYNCED).length,
+        pending: localCustomers.filter(c => c.syncStatus === SyncStatus.PENDING).length,
+        error: localCustomers.filter(c => c.syncStatus === SyncStatus.ERROR).length,
       },
       sales: {
         total: localSales.length,
@@ -696,15 +903,17 @@ export async function getDetailedSyncStatus(): Promise<{
         error: localSales.filter(s => s.syncStatus === SyncStatus.ERROR).length,
       },
     };
-    
+
     // Cloud stats
-    const [productsResult, salesResult] = await Promise.all([
+    const [productsResult, customersResult, salesResult] = await Promise.all([
       supabase.from('products').select('*', { count: 'exact', head: true }),
+      supabase.from('customers').select('*', { count: 'exact', head: true }),
       supabase.from('sales').select('*', { count: 'exact', head: true }),
     ]);
-    
+
     const cloudStats = {
       products: productsResult.count || 0,
+      customers: customersResult.count || 0,
       sales: salesResult.count || 0,
     };
     

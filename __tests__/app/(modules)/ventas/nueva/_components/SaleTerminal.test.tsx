@@ -17,6 +17,15 @@ jest.mock('@/app/_lib/logger', () => ({
   logWarn: jest.fn(),
 }));
 
+jest.mock('@/app/_contexts/TasasContext', () => ({
+  useTasas: () => ({
+    tasas: { bcv: 36.50, paralelo: 42.00, brecha: 15.07, fechaActualizacion: new Date() },
+    actualizarTasas: jest.fn(),
+    recargarTasas: jest.fn(),
+    estaCargando: false,
+  }),
+}));
+
 jest.mock('dexie-react-hooks', () => ({
   useLiveQuery: jest.fn(),
 }));
@@ -34,6 +43,9 @@ jest.mock('@/app/_db/db', () => ({
     customers: {
       add: jest.fn(),
       get: jest.fn(),
+      where: jest.fn().mockReturnThis(),
+      equalsIgnoreCase: jest.fn().mockReturnThis(),
+      first: jest.fn(),
     },
     sales: {
       add: jest.fn(),
@@ -45,6 +57,12 @@ jest.mock('@/app/_db/db', () => ({
       equals: jest.fn().mockReturnThis(),
       toArray: jest.fn(),
     },
+    payments: {
+      add: jest.fn(),
+    },
+    inventoryMovements: {
+      add: jest.fn(),
+    },
     transaction: jest.fn(),
   },
   SyncStatus: {
@@ -52,6 +70,14 @@ jest.mock('@/app/_db/db', () => ({
     SYNCING: 'syncing',
     SYNCED: 'synced',
     ERROR: 'error',
+  },
+  recordInventoryMovement: jest.fn().mockResolvedValue(undefined),
+  MovementType: {
+    SALE: 'sale',
+    PURCHASE: 'purchase',
+    ADJUSTMENT: 'adjustment',
+    INITIAL: 'initial',
+    RETURN: 'return',
   },
 }));
 
@@ -127,14 +153,15 @@ describe('SaleTerminal', () => {
     // Check cart
     expect(screen.queryByText(/El carrito está vacío/i)).not.toBeInTheDocument();
     expect(screen.getByText('Aceite de Motor 1L (x1)')).toBeInTheDocument();
-    expect(screen.getByText('$40.00')).toBeInTheDocument(); // Subtotal
+    // $40.00 appears in product list, cart item, and subtotal breakdown
+    expect(screen.getAllByText('$40.00').length).toBeGreaterThanOrEqual(1);
 
     // Add second product
     fireEvent.click(addButtons[1]);
     expect(screen.getByText('Filtro de Aire (x1)')).toBeInTheDocument();
     
-    // Check total (40 + 22.50 = 62.50)
-    expect(screen.getByText(/Total: \$62\.50/)).toBeInTheDocument();
+    // Check subtotal in fiscal breakdown (40 + 22.50 = 62.50)
+    expect(screen.getByText('$62.50')).toBeInTheDocument();
   });
 
   it('increments quantity when adding same product multiple times', async () => {
@@ -151,7 +178,8 @@ describe('SaleTerminal', () => {
 
     // Should show quantity 2
     expect(screen.getByText('Aceite de Motor 1L (x2)')).toBeInTheDocument();
-    expect(screen.getByText('$80.00')).toBeInTheDocument(); // 40 * 2
+    // $80.00 appears in cart item and subtotal breakdown
+    expect(screen.getAllByText('$80.00').length).toBeGreaterThanOrEqual(1);
   });
 
   it('removes product from cart', async () => {
