@@ -96,6 +96,7 @@ export default function SaleTerminal() {
               createdAt: now,
               updatedAt: now,
               syncStatus: SyncStatus.PENDING,
+              syncUuid: crypto.randomUUID(),
             });
           }
         }
@@ -113,6 +114,7 @@ export default function SaleTerminal() {
           createdAt: now,
           updatedAt: now,
           syncStatus: SyncStatus.PENDING,
+          syncUuid: crypto.randomUUID(),
         });
 
         // 3. Create Items and Update Stock
@@ -125,6 +127,7 @@ export default function SaleTerminal() {
             createdAt: now,
             updatedAt: now,
             syncStatus: SyncStatus.PENDING,
+            syncUuid: crypto.randomUUID(),
           });
 
           // Update product stock
@@ -162,6 +165,7 @@ export default function SaleTerminal() {
           createdAt: now,
           updatedAt: now,
           syncStatus: SyncStatus.PENDING,
+          syncUuid: crypto.randomUUID(),
         });
 
         return sId;
