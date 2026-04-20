@@ -18,7 +18,8 @@ BEGIN
 END $$;
 
 -- Añadir nuevos campos a la tabla products
-ALTER TABLE products 
+ALTER TABLE products
+    ADD COLUMN IF NOT EXISTS supplier TEXT,
     ADD COLUMN IF NOT EXISTS category TEXT,
     ADD COLUMN IF NOT EXISTS barcode TEXT,
     ADD COLUMN IF NOT EXISTS location TEXT,
