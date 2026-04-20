@@ -7,9 +7,9 @@ import { bidirectionalSync, getSyncStats, detectDuplicateSales, getDetailedSyncS
 export default function DiagnosticoPage() {
   const [logs, setLogs] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
-  const [dbStats, setDbStats] = useState({ products: 0, sales: 0, pending: 0 });
+  const [dbStats, setDbStats] = useState({ products: 0, sales: 0, movements: 0, pending: 0 });
   const [duplicates, setDuplicates] = useState<Array<{ id: string; total: number; created_at: string }>>([]);
-  const [cloudStats, setCloudStats] = useState({ products: 0, sales: 0 });
+  const [cloudStats, setCloudStats] = useState({ products: 0, sales: 0, movements: 0 });
 
   useEffect(() => {
     loadStats();
@@ -18,8 +18,9 @@ export default function DiagnosticoPage() {
   async function loadStats() {
     const products = await db.products.count();
     const sales = await db.sales.count();
+    const movements = await db.inventoryMovements.count();
     const stats = await getSyncStats();
-    setDbStats({ products, sales, pending: stats.totalPending });
+    setDbStats({ products, sales, movements, pending: stats.totalPending });
   }
 
   async function checkDuplicates() {
@@ -60,7 +61,7 @@ export default function DiagnosticoPage() {
       addLog(`Productos: ${status.cloud.products}`);
       addLog(`Ventas: ${status.cloud.sales}`);
       
-      setCloudStats({ products: status.cloud.products, sales: status.cloud.sales });
+      setCloudStats({ products: status.cloud.products, sales: status.cloud.sales, movements: 0 });
       setDuplicates(status.duplicates.sales);
       
       if (status.duplicates.sales.length > 0) {
