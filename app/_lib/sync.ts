@@ -698,6 +698,170 @@ export async function fetchProductsFromCloud(): Promise<number> {
   }
 }
 
+// Pull customers from Supabase. Idempotent: skips remote rows whose
+// `local_uuid` already matches a local customer's `syncUuid`. Local
+// records are not modified — pending edits stay pending.
+export async function fetchCustomersFromCloud(): Promise<number> {
+  const { data, error } = await supabase.from('customers').select('*');
+  if (error) throw new Error(`fetchCustomersFromCloud failed: ${error.message}`);
+  if (!data) return 0;
+
+  const localBySyncUuid = new Map<string, true>();
+  for (const c of await db.customers.toArray()) {
+    if (c.syncUuid) localBySyncUuid.set(c.syncUuid, true);
+  }
+
+  let inserted = 0;
+  for (const remote of data) {
+    if (remote.local_uuid && localBySyncUuid.has(remote.local_uuid)) continue;
+    await db.customers.add({
+      name: remote.name,
+      email: remote.email || undefined,
+      phone: remote.phone || undefined,
+      address: remote.address || undefined,
+      localId: remote.id,
+      syncUuid: remote.local_uuid || crypto.randomUUID(),
+      syncStatus: SyncStatus.SYNCED,
+      lastSyncAt: new Date(),
+      createdAt: new Date(remote.created_at || Date.now()),
+      updatedAt: new Date(remote.updated_at || Date.now()),
+    });
+    inserted++;
+  }
+  logInfo(`Inserted ${inserted} customers from cloud`, 'fetchCustomersFromCloud');
+  return inserted;
+}
+
+// Pull sales from Supabase along with their items and payments.
+// Idempotent by `syncUuid`. Resolves remote UUIDs to local refs:
+// `customer_id` → local customer numeric id, `product_id` → local SKU.
+// Items pointing to a product not present locally are skipped (the
+// product fetch should run first).
+export async function fetchSalesFromCloud(): Promise<number> {
+  const { data: sales, error } = await supabase
+    .from('sales')
+    .select('*')
+    .order('sale_date', { ascending: true, nullsFirst: true });
+  if (error) throw new Error(`fetchSalesFromCloud failed: ${error.message}`);
+  if (!sales) return 0;
+
+  // Build remote-id → local-id maps once so we don't query per row.
+  const customerIdByLocalId = new Map<string, number>();
+  for (const c of await db.customers.toArray()) {
+    if (c.localId && c.id !== undefined) customerIdByLocalId.set(c.localId, c.id);
+  }
+  const productSkuByLocalId = new Map<string, string>();
+  for (const p of await db.products.toArray()) {
+    if (p.localId) productSkuByLocalId.set(p.localId, p.sku);
+  }
+  const localSaleSyncUuids = new Set(
+    (await db.sales.toArray()).map((s) => s.syncUuid).filter((u): u is string => !!u)
+  );
+
+  let inserted = 0;
+  for (const remote of sales) {
+    if (remote.local_uuid && localSaleSyncUuids.has(remote.local_uuid)) continue;
+
+    const localSaleId = await db.sales.add({
+      customerId: remote.customer_id ? customerIdByLocalId.get(remote.customer_id) : undefined,
+      subtotalUsd: Number(remote.subtotal_usd),
+      ivaAmountUsd: Number(remote.iva_amount_usd),
+      igtfAmountUsd: Number(remote.igtf_amount_usd),
+      totalAmountUsd: Number(remote.total_amount_usd),
+      exchangeRateVes: Number(remote.exchange_rate_ves),
+      totalAmountVes: Number(remote.total_amount_ves),
+      date: new Date(remote.sale_date || remote.created_at || Date.now()),
+      localId: remote.id,
+      syncUuid: remote.local_uuid || crypto.randomUUID(),
+      syncStatus: SyncStatus.SYNCED,
+      lastSyncAt: new Date(),
+      createdAt: new Date(remote.created_at || Date.now()),
+      updatedAt: new Date(remote.created_at || Date.now()),
+    });
+
+    const { data: items } = await supabase.from('sale_items').select('*').eq('sale_id', remote.id);
+    for (const item of items ?? []) {
+      const sku = productSkuByLocalId.get(item.product_id);
+      if (!sku) {
+        logWarn('Skipping item — product not in local DB', 'fetchSalesFromCloud', { saleId: remote.id, productId: item.product_id });
+        continue;
+      }
+      await db.saleItems.add({
+        saleId: localSaleId,
+        productId: sku,
+        quantity: item.quantity,
+        pricePerUnitUsd: Number(item.price_per_unit_usd),
+        localId: item.id,
+        syncUuid: item.local_uuid || crypto.randomUUID(),
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        createdAt: new Date(remote.created_at || Date.now()),
+        updatedAt: new Date(remote.created_at || Date.now()),
+      });
+    }
+
+    const { data: payments } = await supabase.from('payments').select('*').eq('sale_id', remote.id);
+    for (const p of payments ?? []) {
+      await db.payments.add({
+        saleId: localSaleId,
+        method: p.method,
+        amount: Number(p.amount),
+        referenceCode: p.reference_code || undefined,
+        localId: p.id,
+        syncUuid: p.local_uuid || crypto.randomUUID(),
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        createdAt: new Date(remote.created_at || Date.now()),
+        updatedAt: new Date(remote.created_at || Date.now()),
+      });
+    }
+
+    inserted++;
+  }
+  logInfo(`Inserted ${inserted} sales from cloud`, 'fetchSalesFromCloud');
+  return inserted;
+}
+
+// Pull inventory movements from Supabase. Movements have no `local_uuid`
+// for idempotency, so we follow the same clear+reinsert pattern as
+// products. Movements whose product no longer exists locally are skipped.
+export async function fetchInventoryMovementsFromCloud(): Promise<number> {
+  const { data, error } = await supabase
+    .from('inventory_movements')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`fetchInventoryMovementsFromCloud failed: ${error.message}`);
+  if (!data) return 0;
+
+  const productIdByLocalId = new Map<string, number>();
+  for (const p of await db.products.toArray()) {
+    if (p.localId && p.id !== undefined) productIdByLocalId.set(p.localId, p.id);
+  }
+
+  await db.inventoryMovements.clear();
+
+  let inserted = 0;
+  for (const m of data) {
+    const localProductId = productIdByLocalId.get(m.product_id);
+    if (localProductId === undefined) continue;
+    await db.inventoryMovements.add({
+      productId: localProductId,
+      productSku: m.product_sku,
+      productName: m.product_name,
+      type: m.type,
+      quantity: m.quantity,
+      previousStock: m.previous_stock,
+      newStock: m.new_stock,
+      notes: m.notes || undefined,
+      createdBy: m.created_by || undefined,
+      createdAt: new Date(m.created_at || Date.now()),
+    });
+    inserted++;
+  }
+  logInfo(`Inserted ${inserted} inventory movements from cloud`, 'fetchInventoryMovementsFromCloud');
+  return inserted;
+}
+
 // Full sync (bidirectional)
 export async function fullSync(): Promise<{
   success: boolean;
@@ -948,11 +1112,16 @@ export async function bidirectionalSync(): Promise<{
     }
     uploaded = uploadResult.synced;
 
-    // 2. Descargar datos nuevos de la nube
+    // 2. Descargar datos nuevos de la nube. Order matters: products and
+    // customers must land first because sales/items reference them.
     logInfo('Fetching data from cloud', 'bidirectionalSync');
     try {
-      downloaded = await fetchProductsFromCloud();
-      logInfo('Download completed', 'bidirectionalSync', { downloaded });
+      const products = await fetchProductsFromCloud();
+      const customers = await fetchCustomersFromCloud();
+      const sales = await fetchSalesFromCloud();
+      const movements = await fetchInventoryMovementsFromCloud();
+      downloaded = products + customers + sales + movements;
+      logInfo('Download completed', 'bidirectionalSync', { products, customers, sales, movements });
     } catch (downloadError) {
       const errorMsg = downloadError instanceof Error ? downloadError.message : 'Download failed';
       errors.push(errorMsg);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { db, SyncStatus } from '@/app/_db/db';
-import { bidirectionalSync, getSyncStats, detectDuplicateSales, getDetailedSyncStatus } from '@/app/_lib/sync';
+import { bidirectionalSync, getSyncStats, detectDuplicateSales, getDetailedSyncStatus, fetchInventoryMovementsFromCloud } from '@/app/_lib/sync';
 
 export default function DiagnosticoPage() {
   const [logs, setLogs] = useState<string[]>([]);
