@@ -82,6 +82,7 @@ const tableState: Record<string, any[]> = {
   sales: [],
   saleItems: [],
   payments: [],
+  inventoryMovements: [],
 };
 
 function findById<T extends { id?: number }>(rows: T[], id: number) {
@@ -101,6 +102,9 @@ function makeTable(name: string) {
     async update(id: number, patch: any) {
       const row = findById(tableState[name], id);
       if (row) Object.assign(row, patch);
+    },
+    async clear() {
+      tableState[name] = [];
     },
     async toArray() {
       return [...tableState[name]];
@@ -481,5 +485,190 @@ describe('syncCustomer (via syncPendingData)', () => {
 
     expect(tableState.customers[0].localId).toBe('customer-supabase-id');
     expect(tableState.customers[0].syncStatus).toBe(SyncStatus.SYNCED);
+  });
+});
+
+describe('fetchCustomersFromCloud', () => {
+  it('inserts new customers and stores remote id + syncUuid', async () => {
+    queueSupabase('customers', {
+      data: [
+        { id: 'remote-uuid-1', local_uuid: 'sync-uuid-1', name: 'Juan', email: 'j@test', phone: null, address: null, created_at: '2026-01-01', updated_at: '2026-01-01' },
+        { id: 'remote-uuid-2', local_uuid: 'sync-uuid-2', name: 'Ana', email: null, phone: '555', address: null, created_at: '2026-01-02', updated_at: '2026-01-02' },
+      ],
+      error: null,
+    });
+
+    const inserted = await sync.fetchCustomersFromCloud();
+    expect(inserted).toBe(2);
+    expect(tableState.customers).toHaveLength(2);
+    expect(tableState.customers[0]).toMatchObject({ name: 'Juan', localId: 'remote-uuid-1', syncUuid: 'sync-uuid-1', syncStatus: SyncStatus.SYNCED });
+    expect(tableState.customers[1]).toMatchObject({ name: 'Ana', localId: 'remote-uuid-2', syncUuid: 'sync-uuid-2' });
+  });
+
+  it('skips remote rows whose local_uuid already exists locally (idempotent)', async () => {
+    tableState.customers.push({
+      id: 1, name: 'Juan', syncUuid: 'sync-uuid-1',
+      syncStatus: SyncStatus.SYNCED, createdAt: new Date(), updatedAt: new Date(),
+    });
+
+    queueSupabase('customers', {
+      data: [
+        { id: 'remote-uuid-1', local_uuid: 'sync-uuid-1', name: 'Juan', email: null, phone: null, address: null, created_at: null, updated_at: null },
+        { id: 'remote-uuid-2', local_uuid: 'sync-uuid-2', name: 'Ana', email: null, phone: null, address: null, created_at: null, updated_at: null },
+      ],
+      error: null,
+    });
+
+    const inserted = await sync.fetchCustomersFromCloud();
+    expect(inserted).toBe(1);
+    expect(tableState.customers).toHaveLength(2);
+    expect(tableState.customers.find((c) => c.name === 'Ana')).toBeTruthy();
+  });
+});
+
+describe('fetchSalesFromCloud', () => {
+  it('downloads sale + items + payments and resolves remote UUIDs to local refs', async () => {
+    tableState.products.push({
+      id: 1, sku: 'PROD-001', name: 'Aceite', priceUsd: 10, stockQuantity: 5,
+      localId: 'product-remote-1', syncStatus: SyncStatus.SYNCED,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    tableState.customers.push({
+      id: 1, name: 'Juan', localId: 'customer-remote-1',
+      syncStatus: SyncStatus.SYNCED, createdAt: new Date(), updatedAt: new Date(),
+    });
+
+    queueSupabase('sales', {
+      data: [{
+        id: 'sale-remote-1', local_uuid: 'sale-sync-1',
+        customer_id: 'customer-remote-1',
+        subtotal_usd: 10, iva_amount_usd: 1.6, igtf_amount_usd: 0,
+        total_amount_usd: 11.6, exchange_rate_ves: 40, total_amount_ves: 464,
+        sale_date: '2026-04-20T12:00:00Z', created_at: '2026-04-20T12:00:00Z',
+      }],
+      error: null,
+    });
+    queueSupabase('sale_items', {
+      data: [{ id: 'item-remote-1', local_uuid: 'item-sync-1', sale_id: 'sale-remote-1', product_id: 'product-remote-1', quantity: 1, price_per_unit_usd: 10 }],
+      error: null,
+    });
+    queueSupabase('payments', {
+      data: [{ id: 'payment-remote-1', local_uuid: 'payment-sync-1', sale_id: 'sale-remote-1', method: 'usd_cash', amount: 11.6, reference_code: null }],
+      error: null,
+    });
+
+    const inserted = await sync.fetchSalesFromCloud();
+    expect(inserted).toBe(1);
+
+    expect(tableState.sales[0]).toMatchObject({
+      customerId: 1,                     // resolved from customer.localId === 'customer-remote-1'
+      localId: 'sale-remote-1',
+      syncUuid: 'sale-sync-1',
+      totalAmountUsd: 11.6,
+      syncStatus: SyncStatus.SYNCED,
+    });
+    expect(tableState.saleItems[0]).toMatchObject({
+      saleId: tableState.sales[0].id,    // local numeric id, not remote UUID
+      productId: 'PROD-001',             // resolved from product.localId === 'product-remote-1'
+      localId: 'item-remote-1',
+    });
+    expect(tableState.payments[0]).toMatchObject({
+      saleId: tableState.sales[0].id,
+      method: 'usd_cash',
+      amount: 11.6,
+      localId: 'payment-remote-1',
+    });
+  });
+
+  it('skips sales whose syncUuid already exists locally (idempotent)', async () => {
+    tableState.sales.push({
+      id: 1, syncUuid: 'sale-sync-1', subtotalUsd: 10,
+      ivaAmountUsd: 0, igtfAmountUsd: 0, totalAmountUsd: 10,
+      exchangeRateVes: 40, totalAmountVes: 400, date: new Date(),
+      syncStatus: SyncStatus.SYNCED, createdAt: new Date(), updatedAt: new Date(),
+    });
+
+    queueSupabase('sales', {
+      data: [{
+        id: 'sale-remote-1', local_uuid: 'sale-sync-1', customer_id: null,
+        subtotal_usd: 10, iva_amount_usd: 0, igtf_amount_usd: 0,
+        total_amount_usd: 10, exchange_rate_ves: 40, total_amount_ves: 400,
+        sale_date: null, created_at: null,
+      }],
+      error: null,
+    });
+
+    const inserted = await sync.fetchSalesFromCloud();
+    expect(inserted).toBe(0);
+    expect(tableState.sales).toHaveLength(1);
+  });
+
+  it('skips items whose product is not present locally', async () => {
+    queueSupabase('sales', {
+      data: [{
+        id: 'sale-remote-1', local_uuid: 'sale-sync-1', customer_id: null,
+        subtotal_usd: 10, iva_amount_usd: 0, igtf_amount_usd: 0,
+        total_amount_usd: 10, exchange_rate_ves: 40, total_amount_ves: 400,
+        sale_date: null, created_at: null,
+      }],
+      error: null,
+    });
+    queueSupabase('sale_items', {
+      data: [{ id: 'item-1', local_uuid: 'isync-1', sale_id: 'sale-remote-1', product_id: 'unknown-product', quantity: 1, price_per_unit_usd: 10 }],
+      error: null,
+    });
+    queueSupabase('payments', { data: [], error: null });
+
+    const inserted = await sync.fetchSalesFromCloud();
+    expect(inserted).toBe(1);
+    expect(tableState.sales).toHaveLength(1);
+    expect(tableState.saleItems).toHaveLength(0); // orphan item dropped
+  });
+});
+
+describe('fetchInventoryMovementsFromCloud', () => {
+  it('clears local movements and reinserts remote rows, mapping product_id to local id', async () => {
+    tableState.products.push({
+      id: 1, sku: 'PROD-001', name: 'Aceite', priceUsd: 10, stockQuantity: 5,
+      localId: 'product-remote-1', syncStatus: SyncStatus.SYNCED,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    tableState.inventoryMovements.push({ id: 1, productId: 999, type: 'sale', quantity: -1 } as any);
+
+    queueSupabase('inventory_movements', {
+      data: [{
+        id: 'mov-1', product_id: 'product-remote-1',
+        product_sku: 'PROD-001', product_name: 'Aceite',
+        type: 'initial', quantity: 5, previous_stock: 0, new_stock: 5,
+        notes: 'seed', created_by: 'system', created_at: '2026-01-01',
+      }],
+      error: null,
+    });
+
+    const inserted = await sync.fetchInventoryMovementsFromCloud();
+    expect(inserted).toBe(1);
+    expect(tableState.inventoryMovements).toHaveLength(1);
+    expect(tableState.inventoryMovements[0]).toMatchObject({
+      productId: 1,                // resolved from product.localId === 'product-remote-1'
+      productSku: 'PROD-001',
+      type: 'initial',
+      quantity: 5,
+    });
+  });
+
+  it('skips movements whose product is not present locally', async () => {
+    queueSupabase('inventory_movements', {
+      data: [{
+        id: 'mov-1', product_id: 'unknown-product',
+        product_sku: 'X', product_name: 'X',
+        type: 'sale', quantity: -1, previous_stock: 5, new_stock: 4,
+        notes: null, created_by: null, created_at: null,
+      }],
+      error: null,
+    });
+
+    const inserted = await sync.fetchInventoryMovementsFromCloud();
+    expect(inserted).toBe(0);
+    expect(tableState.inventoryMovements).toHaveLength(0);
   });
 });
