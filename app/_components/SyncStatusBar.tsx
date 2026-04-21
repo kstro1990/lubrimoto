@@ -64,7 +64,8 @@ export default function SyncStatusBar() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
+    // bottom-20 sits above the BottomNavBar (h-16) so they don't overlap.
+    <div className="fixed bottom-20 right-4 z-50">
       <div className="bg-white rounded-lg shadow-lg border p-3 min-w-[300px]">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
