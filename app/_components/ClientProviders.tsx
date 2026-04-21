@@ -17,12 +17,12 @@ export default function ClientProviders({ children }: { children: React.ReactNod
     <NotificationProvider>
       <TasasProvider>
         <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+          <SyncStatusBar />
           <ThemeToggle />
         </div>
         {/* pb-20 reserves space for the fixed BottomNavBar (h-16) so page
             content never sits underneath it. */}
         <div className="pb-20">{children}</div>
-        <SyncStatusBar />
         <BottomNavBar />
       </TasasProvider>
     </NotificationProvider>
