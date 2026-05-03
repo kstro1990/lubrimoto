@@ -24,8 +24,13 @@ jest.mock('dexie', () => {
         reverse: jest.fn().mockReturnThis(),
         toArray: jest.fn(),
       },
+      customers: { add: jest.fn(), update: jest.fn(), get: jest.fn(), where: jest.fn().mockReturnThis() },
+      sales: { add: jest.fn(), update: jest.fn(), get: jest.fn(), where: jest.fn().mockReturnThis() },
+      saleItems: { add: jest.fn(), update: jest.fn(), where: jest.fn().mockReturnThis() },
+      payments: { add: jest.fn(), update: jest.fn(), where: jest.fn().mockReturnThis() },
       version: jest.fn().mockReturnThis(),
       stores: jest.fn().mockReturnThis(),
+      upgrade: jest.fn().mockReturnThis(),
       open: jest.fn().mockResolvedValue(undefined),
     })),
   };
@@ -51,9 +56,11 @@ describe('Database Functions', () => {
 
   describe('generateSKU', () => {
     beforeEach(() => {
-      // Reset date for consistent testing
+      // Use the local-time constructor so the test is timezone-agnostic.
+      // `new Date('2025-02-07')` parses as UTC midnight, which becomes Feb 6 in
+      // any zone west of UTC and breaks generateSKU's local-date formatting.
       jest.useFakeTimers();
-      jest.setSystemTime(new Date('2025-02-07'));
+      jest.setSystemTime(new Date(2025, 1, 7, 12, 0, 0));
     });
 
     afterEach(() => {

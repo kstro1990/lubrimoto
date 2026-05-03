@@ -1,25 +1,46 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { db, Product, Customer, Sale, SaleItem, SyncStatus } from '@/app/_db/db';
+import { db, Product, Customer, Sale, SaleItem, Payment, SyncStatus, recordInventoryMovement, MovementType } from '@/app/_db/db';
 import { supabase } from '@/app/_lib/supabase';
 import { syncPendingData } from '@/app/_lib/sync';
 import { printFiscalInvoice } from '@/app/_lib/printing';
 import { useNotifications } from '@/app/_components/NotificationProvider';
+import { useTasas } from '@/app/_contexts/TasasContext';
 import { logInfo, logError, logWarn } from '@/app/_lib/logger';
 import ProductSearch from '@/app/_components/ui/ProductSearch';
+
+// Tasas fiscales Venezuela (configurables en un futuro desde DB/settings)
+const IVA_RATE = 0.16; // 16% IVA
+const IGTF_RATE = 0.03; // 3% IGTF - aplica a pagos en divisas/cripto
 
 interface CartItem extends Product {
   quantity: number;
 }
 
+type PaymentMethod = Payment['method'];
+
+const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: 'usd_cash', label: 'Efectivo USD' },
+  { value: 'ves_transfer', label: 'Transferencia VES' },
+  { value: 'pago_movil', label: 'Pago Móvil' },
+  { value: 'debit_card', label: 'Tarjeta Débito' },
+];
+
 export default function SaleTerminal() {
   const { success, error: showError } = useNotifications();
+  const { tasas } = useTasas();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customer, setCustomer] = useState<Partial<Customer>>({ name: '', email: '' });
   const [total, setTotal] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [products, setProducts] = useState<Product[]>([]);
+  const [applyIgtf, setApplyIgtf] = useState<boolean>(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('usd_cash');
+  const [paymentReference, setPaymentReference] = useState<string>('');
+
+  // Tasa de cambio: usa la tasa BCV del contexto, o 0 si no hay tasas cargadas
+  const exchangeRate = tasas?.bcv ?? 0;
 
   // Effect to calculate total whenever cart changes
   useEffect(() => {
@@ -47,15 +68,20 @@ export default function SaleTerminal() {
     setIsProcessing(true);
 
     try {
-      const now = new Date();
-      const exchangeRate = 36.50; // Should come from settings or API
-      const subtotal = total;
-      const iva = subtotal * 0.16;
-      const igtf = 0;
-      const totalWithTax = subtotal + iva + igtf;
-      const totalInVes = totalWithTax * exchangeRate;
+      if (!exchangeRate || exchangeRate <= 0) {
+        showError('Sin Tasa de Cambio', 'No hay tasa de cambio disponible. Sincroniza las tasas desde el módulo de Tasas Cambiarias.', 6000);
+        setIsProcessing(false);
+        return;
+      }
 
-      const resultSaleId = await db.transaction('rw', [db.products, db.customers, db.sales, db.saleItems], async () => {
+      const now = new Date();
+      const subtotal = total;
+      const iva = Math.round(subtotal * IVA_RATE * 100) / 100;
+      const igtf = applyIgtf ? Math.round(subtotal * IGTF_RATE * 100) / 100 : 0;
+      const totalWithTax = Math.round((subtotal + iva + igtf) * 100) / 100;
+      const totalInVes = Math.round(totalWithTax * exchangeRate * 100) / 100;
+
+      const resultSaleId = await db.transaction('rw', [db.products, db.customers, db.sales, db.saleItems, db.payments, db.inventoryMovements], async () => {
         let currentCustomerId: number | undefined = undefined;
 
         // 1. Handle Customer
@@ -70,6 +96,7 @@ export default function SaleTerminal() {
               createdAt: now,
               updatedAt: now,
               syncStatus: SyncStatus.PENDING,
+              syncUuid: crypto.randomUUID(),
             });
           }
         }
@@ -87,6 +114,7 @@ export default function SaleTerminal() {
           createdAt: now,
           updatedAt: now,
           syncStatus: SyncStatus.PENDING,
+          syncUuid: crypto.randomUUID(),
         });
 
         // 3. Create Items and Update Stock
@@ -99,6 +127,7 @@ export default function SaleTerminal() {
             createdAt: now,
             updatedAt: now,
             syncStatus: SyncStatus.PENDING,
+            syncUuid: crypto.randomUUID(),
           });
 
           // Update product stock
@@ -107,15 +136,37 @@ export default function SaleTerminal() {
             if (product.stockQuantity < item.quantity) {
               throw new Error(`Stock insuficiente para ${product.name}. Disponible: ${product.stockQuantity}, Solicitado: ${item.quantity}`);
             }
+            const newStock = product.stockQuantity - item.quantity;
             await db.products.update(item.id!, {
-              stockQuantity: product.stockQuantity - item.quantity,
+              stockQuantity: newStock,
               updatedAt: now,
               syncStatus: SyncStatus.PENDING,
             });
+
+            // Record inventory movement for audit trail
+            await recordInventoryMovement(
+              { ...product, stockQuantity: newStock },
+              MovementType.SALE,
+              -item.quantity,
+              sId,
+              `Venta #${sId} - ${item.quantity} unidad(es)`
+            );
           } else {
             throw new Error(`Producto ${item.name} no encontrado en la base de datos.`);
           }
         }
+
+        // 4. Record Payment
+        await db.payments.add({
+          saleId: sId,
+          method: paymentMethod,
+          amount: totalWithTax,
+          referenceCode: paymentReference.trim() || undefined,
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: SyncStatus.PENDING,
+          syncUuid: crypto.randomUUID(),
+        });
 
         return sId;
       });
@@ -149,29 +200,25 @@ export default function SaleTerminal() {
         5000
       );
 
-      // Sincronizar automáticamente con Supabase
-      try {
-        const syncResult = await syncPendingData();
-        if (syncResult.synced > 0) {
-          success(
-            'Sincronización Exitosa',
-            `${syncResult.synced} registro(s) sincronizado(s) con la nube`,
-            4000
-          );
-        } else if (!syncResult.success && syncResult.errors.length > 0) {
-          showError(
-            'Error de Sincronización',
-            syncResult.errors[0],
-            6000
-          );
-        }
-      } catch (syncErr) {
-        logError('Error en sincronización automática', syncErr as Error, 'SaleTerminal');
-      }
+      // Sincronizar automáticamente con Supabase (no bloquea la venta)
+      syncPendingData()
+        .then((syncResult) => {
+          if (syncResult.synced > 0) {
+            logInfo('Sync after sale', 'SaleTerminal', { synced: syncResult.synced });
+          }
+          if (!syncResult.success && syncResult.errors.length > 0) {
+            logWarn('Sync after sale had errors', 'SaleTerminal', { errors: syncResult.errors });
+          }
+        })
+        .catch((syncErr) => {
+          logWarn('Sync after sale failed, will retry later', 'SaleTerminal', { error: String(syncErr) });
+        });
 
       setCart([]);
       setCustomer({ name: '', email: '' });
       setTotal(0);
+      setPaymentMethod('usd_cash');
+      setPaymentReference('');
 
     } catch (err: any) {
       logError('Error processing sale', err instanceof Error ? err : new Error(String(err)), 'SaleTerminal', {
@@ -323,8 +370,77 @@ export default function SaleTerminal() {
             />
           </div>
 
-          <div className="text-right text-3xl font-bold mb-6">
-            Total: ${total.toFixed(2)}
+          {/* Payment Method */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Método de Pago</label>
+            <div className="grid grid-cols-2 gap-2">
+              {PAYMENT_METHODS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setPaymentMethod(value)}
+                  className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                    paymentMethod === value
+                      ? 'bg-blue-500 text-white border-blue-500'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(paymentMethod === 'ves_transfer' || paymentMethod === 'pago_movil') && (
+            <div className="mb-4">
+              <label htmlFor="paymentRef" className="block text-sm font-medium text-gray-700">
+                Nro. de Referencia
+              </label>
+              <input
+                type="text"
+                id="paymentRef"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border px-3 py-2"
+                value={paymentReference}
+                onChange={(e) => setPaymentReference(e.target.value)}
+                placeholder="Nro. de referencia o confirmación"
+              />
+            </div>
+          )}
+
+          {/* Desglose fiscal */}
+          <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm space-y-1">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Subtotal:</span>
+              <span>${total.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">IVA ({(IVA_RATE * 100).toFixed(0)}%):</span>
+              <span>${(Math.round(total * IVA_RATE * 100) / 100).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <label className="text-gray-600 flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={applyIgtf}
+                  onChange={(e) => setApplyIgtf(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                IGTF ({(IGTF_RATE * 100).toFixed(0)}%):
+              </label>
+              <span>${applyIgtf ? (Math.round(total * IGTF_RATE * 100) / 100).toFixed(2) : '0.00'}</span>
+            </div>
+            <div className="border-t pt-1 flex justify-between font-bold text-base">
+              <span>Total USD:</span>
+              <span>${(Math.round((total + total * IVA_RATE + (applyIgtf ? total * IGTF_RATE : 0)) * 100) / 100).toFixed(2)}</span>
+            </div>
+            {exchangeRate > 0 && (
+              <div className="flex justify-between text-gray-500 text-xs pt-1">
+                <span>Tasa BCV: Bs. {exchangeRate.toFixed(2)}</span>
+                <span>≈ Bs. {(Math.round((total + total * IVA_RATE + (applyIgtf ? total * IGTF_RATE : 0)) * exchangeRate * 100) / 100).toFixed(2)}</span>
+              </div>
+            )}
+            {!exchangeRate || exchangeRate <= 0 ? (
+              <p className="text-red-500 text-xs mt-1">Sin tasa de cambio. Sincroniza desde Tasas Cambiarias.</p>
+            ) : null}
           </div>
           <button
             onClick={handleFinalizeSale}

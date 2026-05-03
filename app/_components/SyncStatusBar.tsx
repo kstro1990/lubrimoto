@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { syncEvents, isOnline, bidirectionalSync, getSyncStats } from '../_lib/sync';
 import { useNotifications } from './NotificationProvider';
 import { RefreshCw, Cloud, CloudOff, Upload } from 'lucide-react';
@@ -10,8 +10,9 @@ export default function SyncStatusBar() {
   const [syncing, setSyncing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [lastSync, setLastSync] = useState<Date | null>(null);
-  const [showDetails, setShowDetails] = useState(false);
+  const [open, setOpen] = useState(false);
   const { success, error: showError } = useNotifications();
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     updateSyncStats();
@@ -32,6 +33,18 @@ export default function SyncStatusBar() {
       clearInterval(interval);
     };
   }, []);
+
+  // Close popover on outside click — same pattern as ProductSearch.
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
 
   async function updateSyncStats() {
     const stats = await getSyncStats();
@@ -63,49 +76,94 @@ export default function SyncStatusBar() {
     }
   }
 
+  const statusLabel = !online
+    ? 'Sin conexión'
+    : syncing
+    ? 'Sincronizando…'
+    : pendingCount > 0
+    ? `${pendingCount} pendientes`
+    : 'Sincronizado';
+
   return (
-    <div className="fixed bottom-4 right-4 z-50">
-      <div className="bg-white rounded-lg shadow-lg border p-3 min-w-[300px]">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            {online ? <Cloud className="w-4 h-4 text-green-500" /> : <CloudOff className="w-4 h-4 text-red-500" />}
-            <span className={`text-sm font-medium ${online ? 'text-green-600' : 'text-red-600'}`}>
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label={`Sincronización: ${statusLabel}`}
+        aria-expanded={open}
+        title={statusLabel}
+        className="relative flex items-center justify-center w-10 h-10 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+      >
+        {syncing ? (
+          <RefreshCw className="w-5 h-5 animate-spin text-blue-600 dark:text-blue-400" />
+        ) : online ? (
+          <Cloud className="w-5 h-5 text-green-600 dark:text-green-400" />
+        ) : (
+          <CloudOff className="w-5 h-5 text-red-600 dark:text-red-400" />
+        )}
+        {pendingCount > 0 && !syncing && (
+          <span
+            aria-hidden="true"
+            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-semibold leading-none"
+          >
+            {pendingCount > 99 ? '99+' : pendingCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          aria-label="Detalles de sincronización"
+          className="absolute top-full right-0 mt-2 z-50 w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            {online ? (
+              <Cloud className="w-4 h-4 text-green-500" />
+            ) : (
+              <CloudOff className="w-4 h-4 text-red-500" />
+            )}
+            <span
+              className={`text-sm font-medium ${
+                online ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+              }`}
+            >
               {online ? 'En línea' : 'Sin conexión'}
             </span>
           </div>
-          <button onClick={() => setShowDetails(!showDetails)} className="text-xs text-gray-500 hover:text-gray-700">
-            {showDetails ? 'Ocultar' : 'Detalles'}
-          </button>
-        </div>
-        {showDetails && (
-          <div className="border-t pt-2 mb-2 space-y-2">
+
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mb-3 space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Pendientes local:</span>
-              <span className="font-medium flex items-center gap-1">
+              <span className="text-gray-600 dark:text-gray-400">Pendientes local:</span>
+              <span className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1">
                 <Upload className="w-3 h-3" /> {pendingCount} items
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Última sync:</span>
-              <span className="font-medium">{lastSync ? lastSync.toLocaleTimeString() : 'Nunca'}</span>
+              <span className="text-gray-600 dark:text-gray-400">Última sync:</span>
+              <span className="font-medium text-gray-900 dark:text-gray-100">
+                {lastSync ? lastSync.toLocaleTimeString() : 'Nunca'}
+              </span>
             </div>
           </div>
-        )}
-        <button
-          onClick={handleSync}
-          disabled={syncing || !online}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          title="Sincronizar datos locales con la nube (subir y descargar)"
-        >
-          <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Sincronizando...' : pendingCount > 0 ? `Sync (${pendingCount})` : 'Sync'}
-        </button>
-        {!online && (
-          <p className="text-xs text-red-500 mt-2 text-center">
-            Sin conexión. Los datos se sincronizarán automáticamente al reconectar.
-          </p>
-        )}
-      </div>
+
+          <button
+            onClick={handleSync}
+            disabled={syncing || !online}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            title="Sincronizar datos locales con la nube (subir y descargar)"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Sincronizando...' : pendingCount > 0 ? `Sync (${pendingCount})` : 'Sync'}
+          </button>
+
+          {!online && (
+            <p className="text-xs text-red-500 mt-2 text-center">
+              Sin conexión. Los datos se sincronizarán automáticamente al reconectar.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

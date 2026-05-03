@@ -36,6 +36,12 @@ jest.mock('@/app/_db/db', () => ({
     inventoryMovements: {
       add: jest.fn().mockResolvedValue(undefined),
     },
+    // Page wraps the create flow in a Dexie transaction; in the mock we just
+    // execute the callback directly so the mocked tables receive the calls.
+    transaction: (_mode: string, ..._args: any[]) => {
+      const cb = _args[_args.length - 1] as () => Promise<unknown>;
+      return cb();
+    },
   },
   generateSKU: jest.fn().mockResolvedValue('PROD-250207-0001'),
   recordInventoryMovement: (...args: any[]) => mockRecordMovement(...args),

@@ -20,7 +20,12 @@ export enum MovementType {
 // Base interface with sync fields
 export interface Syncable {
   id?: number;
-  localId?: string; // UUID generated locally
+  // Client-generated UUID used as idempotency key when syncing to Supabase.
+  // Persisted locally the moment the record is created so that retries after a
+  // partial failure collapse onto the same remote row (UPSERT on local_uuid).
+  syncUuid?: string;
+  // Supabase primary key returned after a successful sync.
+  localId?: string;
   syncStatus?: SyncStatus;
   syncError?: string;
   lastSyncAt?: Date;
@@ -293,6 +298,32 @@ export class LubriMotosDB extends Dexie {
       gastosFijos: '++id, updatedAt',
       configuracionMetas: '++id, mes, año, updatedAt',
       historialVentasMeta: '++id, mes, año, createdAt',
+    });
+
+    // Version 8 - Add syncUuid index for idempotent sync across client retries
+    this.version(8).stores({
+      products: '++id, sku, name, category, barcode, syncStatus, updatedAt, lastSyncAt, createdAt, syncUuid',
+      customers: '++id, name, syncStatus, updatedAt, lastSyncAt, syncUuid',
+      sales: '++id, date, syncStatus, updatedAt, lastSyncAt, syncUuid',
+      saleItems: '++id, saleId, productId, syncStatus, lastSyncAt, syncUuid',
+      payments: '++id, saleId, syncStatus, lastSyncAt, syncUuid',
+      exchangeRates: '++id, recordedAt',
+      inventoryMovements: '++id, productId, type, createdAt',
+      syncQueue: '++id, tableName, createdAt',
+      configuracionCambiaria: '++id, fecha, esActiva, updatedAt',
+      historialTasas: '++id, fecha, hora, createdAt',
+      calculosPrecios: '++id, productId, configId, fechaCalculo, createdAt',
+      gastosFijos: '++id, updatedAt',
+      configuracionMetas: '++id, mes, año, updatedAt',
+      historialVentasMeta: '++id, mes, año, createdAt',
+    }).upgrade(async (tx) => {
+      // Backfill syncUuid for any pre-existing records so retries can use it as an idempotency key.
+      const tables = ['products', 'customers', 'sales', 'saleItems', 'payments'] as const;
+      for (const name of tables) {
+        await tx.table(name).toCollection().modify((record) => {
+          if (!record.syncUuid) record.syncUuid = crypto.randomUUID();
+        });
+      }
     });
   }
 }

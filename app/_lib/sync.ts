@@ -1,6 +1,23 @@
+import type { Table } from 'dexie';
 import { supabase } from './supabase';
-import db, { SyncStatus, Product, Sale, SaleItem, Customer } from '../_db/db';
+import db, { SyncStatus, Syncable, Product, Sale, SaleItem, Customer, Payment } from '../_db/db';
 import { logInfo, logError, logWarn } from './logger';
+
+// Ensure a Syncable record has a client-generated UUID to use as the Supabase
+// `local_uuid` idempotency key. Persists the UUID synchronously so that a
+// crash between generate and insert still lets the next retry collapse onto
+// the same remote row instead of creating a duplicate.
+async function ensureSyncUuid<T extends Syncable>(table: Table<T>, record: T): Promise<string> {
+  if (record.syncUuid) return record.syncUuid;
+  const uuid = crypto.randomUUID();
+  record.syncUuid = uuid;
+  if (record.id !== undefined) {
+    // Dexie's UpdateSpec is a mapped type over T; TS can't narrow it through
+    // the generic bound, so assert the single-field patch explicitly.
+    await table.update(record.id as number, { syncUuid: uuid } as unknown as Parameters<typeof table.update>[1]);
+  }
+  return uuid;
+}
 
 // Simple event emitter for sync status
 class SyncEventEmitter {
@@ -42,6 +59,66 @@ export function setupNetworkListeners() {
   window.addEventListener('offline', () => {
     syncEvents.emit('offline');
   });
+}
+
+// Transform local customer to Supabase format
+function transformCustomerToSupabase(customer: Customer): Record<string, unknown> {
+  return {
+    name: customer.name,
+    email: customer.email || null,
+    phone: customer.phone || null,
+    address: customer.address || null,
+  };
+}
+
+// Transform Supabase customer to local format
+function transformCustomerFromSupabase(data: Record<string, unknown>): Omit<Customer, 'id'> {
+  return {
+    localId: data.id as string,
+    name: data.name as string,
+    email: (data.email as string) || undefined,
+    phone: (data.phone as string) || undefined,
+    address: (data.address as string) || undefined,
+    syncStatus: SyncStatus.SYNCED,
+    lastSyncAt: new Date(),
+    createdAt: new Date((data.created_at as string) || Date.now()),
+    updatedAt: new Date((data.updated_at as string) || Date.now()),
+  };
+}
+
+// Sync a single customer to Supabase using UPSERT on `local_uuid` for idempotency.
+async function syncCustomer(customer: Customer): Promise<void> {
+  if (customer.id === undefined) {
+    throw new Error('syncCustomer called without a local id');
+  }
+
+  logInfo('Syncing customer', 'syncCustomer', { name: customer.name, id: customer.id });
+
+  const syncUuid = await ensureSyncUuid(db.customers, customer);
+
+  const { data, error } = await supabase
+    .from('customers')
+    .upsert(
+      { local_uuid: syncUuid, ...transformCustomerToSupabase(customer) },
+      { onConflict: 'local_uuid' }
+    )
+    .select('id')
+    .single();
+
+  if (error || !data) {
+    const msg = error?.message || 'No data returned from Supabase';
+    logError('Failed to upsert customer', error as Error, 'syncCustomer', { name: customer.name });
+    throw new Error(`Supabase customer upsert failed: ${msg}`);
+  }
+
+  await db.customers.update(customer.id, {
+    localId: data.id,
+    syncStatus: SyncStatus.SYNCED,
+    lastSyncAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  logInfo('Customer synced', 'syncCustomer', { name: customer.name, supabaseId: data.id });
 }
 
 // Transform local product to Supabase format
@@ -170,150 +247,184 @@ async function syncProduct(product: Product): Promise<void> {
   }
 }
 
-// Sync a single sale to Supabase
-async function syncSale(sale: Sale): Promise<void> {
-  logInfo('Syncing sale', 'syncSale', { saleId: sale.id, total: sale.totalAmountUsd, localId: sale.localId });
-  
-  // Check if already synced (has localId)
-  if (sale.localId) {
-    logInfo('Sale already synced, skipping', 'syncSale', { saleId: sale.id, localId: sale.localId });
-    
-    // Update sync status and timestamp even if already synced
-    await db.sales.update(sale.id!, {
-      syncStatus: SyncStatus.SYNCED,
-      lastSyncAt: new Date(),
-      updatedAt: new Date(),
-    });
-    
-    return;
+// Resolve the Supabase product UUID for a sale item, syncing the product first
+// if needed. Throws if the product is missing locally or cannot be synced —
+// this prevents the previous silent-skip behaviour that produced cloud sales
+// with missing line items.
+async function resolveProductSupabaseId(sku: string): Promise<string> {
+  const local = await db.products.where('sku').equals(sku).first();
+  if (!local) {
+    throw new Error(`Product not found locally: ${sku}`);
   }
-  
-  // Get sale items
-  const items = await db.saleItems.where('saleId').equals(sale.id!).toArray();
-  logInfo(`Found ${items.length} items for sale`, 'syncSale', { saleId: sale.id });
-  
-  // First sync the sale
+  if (local.localId) return local.localId;
+
+  await syncProduct(local);
+  const refreshed = await db.products.where('sku').equals(sku).first();
+  if (!refreshed?.localId) {
+    throw new Error(`Could not resolve Supabase id for product ${sku} after sync`);
+  }
+  return refreshed.localId;
+}
+
+// Sync a single sale to Supabase.
+//
+// Guarantees:
+// - Idempotent: a retry after any partial failure upserts onto the same
+//   remote rows (keyed by `local_uuid`), never duplicates.
+// - All-or-nothing: pre-validates that every referenced product and customer
+//   can be synced before touching the sale; items and payments failures throw
+//   instead of silently dropping data.
+async function syncSale(sale: Sale): Promise<void> {
+  if (sale.id === undefined) {
+    throw new Error('syncSale called without a local id');
+  }
+
+  logInfo('Syncing sale', 'syncSale', { saleId: sale.id, total: sale.totalAmountUsd });
+
+  const saleUuid = await ensureSyncUuid(db.sales, sale);
+  const items = await db.saleItems.where('saleId').equals(sale.id).toArray();
+  const payments = await db.payments.where('saleId').equals(sale.id).toArray();
+
+  // 1. Pre-validate every referenced product (throws if any cannot be synced).
+  const productIdBySku = new Map<string, string>();
+  for (const item of items) {
+    if (!productIdBySku.has(item.productId)) {
+      productIdBySku.set(item.productId, await resolveProductSupabaseId(item.productId));
+    }
+  }
+
+  // 2. Sync customer if attached (throws on failure rather than dropping the link).
+  let customerSupabaseId: string | null = null;
+  if (sale.customerId !== undefined) {
+    const customer = await db.customers.get(sale.customerId);
+    if (!customer) {
+      throw new Error(`Customer not found locally: ${sale.customerId}`);
+    }
+    if (!customer.localId) {
+      await syncCustomer(customer);
+      const refreshed = await db.customers.get(sale.customerId);
+      customerSupabaseId = refreshed?.localId ?? null;
+      if (!customerSupabaseId) {
+        throw new Error(`Could not resolve Supabase id for customer ${sale.customerId}`);
+      }
+    } else {
+      customerSupabaseId = customer.localId;
+    }
+  }
+
+  // 3. Assign syncUuids to every item and payment so subsequent retries stay idempotent.
+  for (const item of items) await ensureSyncUuid(db.saleItems, item);
+  for (const payment of payments) await ensureSyncUuid(db.payments, payment);
+
+  // 4. UPSERT sale.
   const { data: saleData, error: saleError } = await supabase
     .from('sales')
-    .insert({
-      subtotal_usd: sale.subtotalUsd,
-      iva_amount_usd: sale.ivaAmountUsd,
-      igtf_amount_usd: sale.igtfAmountUsd,
-      total_amount_usd: sale.totalAmountUsd,
-      exchange_rate_ves: sale.exchangeRateVes,
-      total_amount_ves: sale.totalAmountVes,
-    })
-    .select()
+    .upsert(
+      {
+        local_uuid: saleUuid,
+        customer_id: customerSupabaseId,
+        subtotal_usd: sale.subtotalUsd,
+        iva_amount_usd: sale.ivaAmountUsd,
+        igtf_amount_usd: sale.igtfAmountUsd,
+        total_amount_usd: sale.totalAmountUsd,
+        exchange_rate_ves: sale.exchangeRateVes,
+        total_amount_ves: sale.totalAmountVes,
+        sale_date: sale.date.toISOString(),
+      },
+      { onConflict: 'local_uuid' }
+    )
+    .select('id')
     .single();
 
-  if (saleError) {
-    logError('Failed to insert sale', saleError, 'syncSale', { saleId: sale.id });
-    throw saleError;
-  }
-  
-  logInfo('Sale inserted to Supabase', 'syncSale', { saleId: sale.id, supabaseId: saleData.id });
-
-  // Then sync the items - need to get Supabase product IDs
-  const saleItemsData = [];
-  for (const item of items) {
-    // item.productId is the SKU, we need to find the Supabase product ID
-    let localProduct = await db.products.where('sku').equals(item.productId).first();
-    if (!localProduct) {
-      throw new Error(`Product not found locally: ${item.productId}`);
-    }
-    
-    // Use localId if available (Supabase ID), otherwise we need to find it
-    let supabaseProductId = localProduct.localId;
-    
-    // If product is not synced, try to sync it first
-    if (!supabaseProductId) {
-      logInfo('Product not synced, attempting to sync first', 'syncSale', { sku: item.productId });
-      try {
-        await syncProduct(localProduct);
-        // Reload product to get the new localId
-        localProduct = await db.products.where('sku').equals(item.productId).first();
-        supabaseProductId = localProduct?.localId;
-      } catch (syncError) {
-        logWarn('Could not sync product, trying to find in Supabase', 'syncSale', { sku: item.productId, error: syncError });
-      }
-    }
-    
-    // If still no localId, try to find in Supabase by SKU
-    if (!supabaseProductId) {
-      const { data: productData, error: productError } = await supabase
-        .from('products')
-        .select('id')
-        .eq('sku', item.productId)
-        .single();
-      
-      if (productError || !productData) {
-        // Product doesn't exist in Supabase, use a placeholder or skip
-        logWarn('Product not found in Supabase, using null reference', 'syncSale', { sku: item.productId });
-        supabaseProductId = undefined;
-      } else {
-        supabaseProductId = productData.id;
-        // Update local record with Supabase ID
-        if (localProduct?.id) {
-          await db.products.update(localProduct.id, {
-            localId: productData.id,
-            syncStatus: SyncStatus.SYNCED,
-            lastSyncAt: new Date(),
-          });
-        }
-      }
-    }
-    
-    // Only add item if we have a valid product ID
-    if (supabaseProductId) {
-      saleItemsData.push({
-        sale_id: saleData.id,
-        product_id: supabaseProductId,
-        quantity: item.quantity,
-        price_per_unit_usd: item.pricePerUnitUsd,
-      });
-    } else {
-      logWarn('Skipping sale item - no valid product ID', 'syncSale', { sku: item.productId, saleId: saleData.id });
-    }
+  if (saleError || !saleData) {
+    const msg = saleError?.message || 'No data returned from Supabase';
+    logError('Failed to upsert sale', saleError as Error, 'syncSale', { saleId: sale.id });
+    throw new Error(`Supabase sale upsert failed: ${msg}`);
   }
 
-  // Skip if no valid items to insert
-  if (saleItemsData.length === 0 && items.length > 0) {
-    logWarn('No valid items to sync for sale', 'syncSale', { saleId: sale.id });
-  } else if (saleItemsData.length > 0) {
-    const { error: itemsError } = await supabase
+  // Persist the Supabase id in SYNCING state immediately so a crash between
+  // now and the final update still lets the next retry find the remote row.
+  await db.sales.update(sale.id, {
+    localId: saleData.id,
+    syncStatus: SyncStatus.SYNCING,
+    lastSyncAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  // 5. UPSERT items.
+  if (items.length > 0) {
+    const itemsPayload = items.map((item) => ({
+      local_uuid: item.syncUuid,
+      sale_id: saleData.id,
+      product_id: productIdBySku.get(item.productId)!,
+      quantity: item.quantity,
+      price_per_unit_usd: item.pricePerUnitUsd,
+    }));
+
+    const { data: itemsData, error: itemsError } = await supabase
       .from('sale_items')
-      .insert(saleItemsData);
+      .upsert(itemsPayload, { onConflict: 'local_uuid' })
+      .select('id, local_uuid');
 
-    if (itemsError) {
-      logError('Failed to insert sale items', itemsError, 'syncSale', { saleId: sale.id });
-      throw itemsError;
+    if (itemsError || !itemsData) {
+      const msg = itemsError?.message || 'No data returned from Supabase';
+      logError('Failed to upsert sale items', itemsError as Error, 'syncSale', { saleId: sale.id });
+      throw new Error(`Supabase sale_items upsert failed: ${msg}`);
     }
-    
-    logInfo('Sale items inserted', 'syncSale', { saleId: sale.id, itemCount: saleItemsData.length });
-  }
 
-  // Update local records using transaction
-  await db.transaction('rw', [db.sales, db.saleItems], async () => {
-    // Update sale
-    await db.sales.update(sale.id!, {
-      syncStatus: SyncStatus.SYNCED,
-      lastSyncAt: new Date(),
-      localId: saleData.id,
-      updatedAt: new Date(),
-    });
-
-    // Update items
+    const itemIdByUuid = new Map(itemsData.map((r) => [r.local_uuid as string, r.id as string]));
     for (const item of items) {
-      await db.saleItems.update(item.id!, {
+      if (item.id === undefined) continue;
+      await db.saleItems.update(item.id, {
+        localId: itemIdByUuid.get(item.syncUuid!) ?? item.localId,
         syncStatus: SyncStatus.SYNCED,
         lastSyncAt: new Date(),
-        localId: saleData.id,
         updatedAt: new Date(),
       });
     }
+  }
+
+  // 6. UPSERT payments.
+  if (payments.length > 0) {
+    const paymentsPayload = payments.map((p) => ({
+      local_uuid: p.syncUuid,
+      sale_id: saleData.id,
+      method: p.method,
+      amount: p.amount,
+      reference_code: p.referenceCode || null,
+    }));
+
+    const { data: paymentsData, error: paymentsError } = await supabase
+      .from('payments')
+      .upsert(paymentsPayload, { onConflict: 'local_uuid' })
+      .select('id, local_uuid');
+
+    if (paymentsError || !paymentsData) {
+      const msg = paymentsError?.message || 'No data returned from Supabase';
+      logError('Failed to upsert payments', paymentsError as Error, 'syncSale', { saleId: sale.id });
+      throw new Error(`Supabase payments upsert failed: ${msg}`);
+    }
+
+    const paymentIdByUuid = new Map(paymentsData.map((r) => [r.local_uuid as string, r.id as string]));
+    for (const payment of payments) {
+      if (payment.id === undefined) continue;
+      await db.payments.update(payment.id, {
+        localId: paymentIdByUuid.get(payment.syncUuid!) ?? payment.localId,
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+  }
+
+  // 7. Mark the sale fully synced only after items and payments succeed.
+  await db.sales.update(sale.id, {
+    syncStatus: SyncStatus.SYNCED,
+    lastSyncAt: new Date(),
+    updatedAt: new Date(),
   });
-  
-  logInfo('Sale synced successfully', 'syncSale', { saleId: sale.id, supabaseId: saleData.id });
+
+  logInfo('Sale synced', 'syncSale', { saleId: sale.id, supabaseId: saleData.id });
 }
 
 // Main sync function
@@ -365,10 +476,37 @@ export async function syncPendingData(): Promise<{
       }
     }
 
-    // Sync sales
-    const pendingSales = await db.sales
+    // Sync customers (before sales, so customer_id is available)
+    const pendingCustomers = await db.customers
       .where('syncStatus')
       .equals(SyncStatus.PENDING)
+      .toArray();
+
+    logInfo('Found pending customers', 'syncPendingData', { count: pendingCustomers.length });
+
+    for (const customer of pendingCustomers) {
+      try {
+        await syncCustomer(customer);
+        synced++;
+      } catch (error) {
+        failed++;
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        errors.push(`Customer ${customer.name}: ${errorMsg}`);
+        if (customer.id) {
+          await db.customers.update(customer.id, {
+            syncStatus: SyncStatus.ERROR,
+            syncError: errorMsg,
+            updatedAt: new Date(),
+          });
+        }
+      }
+    }
+
+    // Sync sales. Include SYNCING so we finish sales interrupted mid-sync by
+    // a crash or page reload (the UPSERT on local_uuid is idempotent).
+    const pendingSales = await db.sales
+      .where('syncStatus')
+      .anyOf(SyncStatus.PENDING, SyncStatus.SYNCING)
       .toArray();
 
     logInfo('Found pending sales', 'syncPendingData', { count: pendingSales.length });
@@ -419,12 +557,18 @@ export async function syncPendingData(): Promise<{
 // Get sync statistics
 export async function getSyncStats(): Promise<{
   pendingProducts: number;
+  pendingCustomers: number;
   pendingSales: number;
   totalPending: number;
   lastSync: Date | null;
 }> {
   try {
     const pendingProducts = await db.products
+      .where('syncStatus')
+      .equals(SyncStatus.PENDING)
+      .count();
+
+    const pendingCustomers = await db.customers
       .where('syncStatus')
       .equals(SyncStatus.PENDING)
       .count();
@@ -455,14 +599,16 @@ export async function getSyncStats(): Promise<{
 
     return {
       pendingProducts,
+      pendingCustomers,
       pendingSales,
-      totalPending: pendingProducts + pendingSales,
+      totalPending: pendingProducts + pendingCustomers + pendingSales,
       lastSync,
     };
   } catch (error) {
     logError('Error getting sync stats', error as Error, 'getSyncStats');
     return {
       pendingProducts: 0,
+      pendingCustomers: 0,
       pendingSales: 0,
       totalPending: 0,
       lastSync: null,
@@ -550,6 +696,170 @@ export async function fetchProductsFromCloud(): Promise<number> {
     console.error('Stack:', errStack);
     throw new Error(`Database update failed: ${errMsg}. Stack: ${errStack}`);
   }
+}
+
+// Pull customers from Supabase. Idempotent: skips remote rows whose
+// `local_uuid` already matches a local customer's `syncUuid`. Local
+// records are not modified — pending edits stay pending.
+export async function fetchCustomersFromCloud(): Promise<number> {
+  const { data, error } = await supabase.from('customers').select('*');
+  if (error) throw new Error(`fetchCustomersFromCloud failed: ${error.message}`);
+  if (!data) return 0;
+
+  const localBySyncUuid = new Map<string, true>();
+  for (const c of await db.customers.toArray()) {
+    if (c.syncUuid) localBySyncUuid.set(c.syncUuid, true);
+  }
+
+  let inserted = 0;
+  for (const remote of data) {
+    if (remote.local_uuid && localBySyncUuid.has(remote.local_uuid)) continue;
+    await db.customers.add({
+      name: remote.name,
+      email: remote.email || undefined,
+      phone: remote.phone || undefined,
+      address: remote.address || undefined,
+      localId: remote.id,
+      syncUuid: remote.local_uuid || crypto.randomUUID(),
+      syncStatus: SyncStatus.SYNCED,
+      lastSyncAt: new Date(),
+      createdAt: new Date(remote.created_at || Date.now()),
+      updatedAt: new Date(remote.updated_at || Date.now()),
+    });
+    inserted++;
+  }
+  logInfo(`Inserted ${inserted} customers from cloud`, 'fetchCustomersFromCloud');
+  return inserted;
+}
+
+// Pull sales from Supabase along with their items and payments.
+// Idempotent by `syncUuid`. Resolves remote UUIDs to local refs:
+// `customer_id` → local customer numeric id, `product_id` → local SKU.
+// Items pointing to a product not present locally are skipped (the
+// product fetch should run first).
+export async function fetchSalesFromCloud(): Promise<number> {
+  const { data: sales, error } = await supabase
+    .from('sales')
+    .select('*')
+    .order('sale_date', { ascending: true, nullsFirst: true });
+  if (error) throw new Error(`fetchSalesFromCloud failed: ${error.message}`);
+  if (!sales) return 0;
+
+  // Build remote-id → local-id maps once so we don't query per row.
+  const customerIdByLocalId = new Map<string, number>();
+  for (const c of await db.customers.toArray()) {
+    if (c.localId && c.id !== undefined) customerIdByLocalId.set(c.localId, c.id);
+  }
+  const productSkuByLocalId = new Map<string, string>();
+  for (const p of await db.products.toArray()) {
+    if (p.localId) productSkuByLocalId.set(p.localId, p.sku);
+  }
+  const localSaleSyncUuids = new Set(
+    (await db.sales.toArray()).map((s) => s.syncUuid).filter((u): u is string => !!u)
+  );
+
+  let inserted = 0;
+  for (const remote of sales) {
+    if (remote.local_uuid && localSaleSyncUuids.has(remote.local_uuid)) continue;
+
+    const localSaleId = await db.sales.add({
+      customerId: remote.customer_id ? customerIdByLocalId.get(remote.customer_id) : undefined,
+      subtotalUsd: Number(remote.subtotal_usd),
+      ivaAmountUsd: Number(remote.iva_amount_usd),
+      igtfAmountUsd: Number(remote.igtf_amount_usd),
+      totalAmountUsd: Number(remote.total_amount_usd),
+      exchangeRateVes: Number(remote.exchange_rate_ves),
+      totalAmountVes: Number(remote.total_amount_ves),
+      date: new Date(remote.sale_date || remote.created_at || Date.now()),
+      localId: remote.id,
+      syncUuid: remote.local_uuid || crypto.randomUUID(),
+      syncStatus: SyncStatus.SYNCED,
+      lastSyncAt: new Date(),
+      createdAt: new Date(remote.created_at || Date.now()),
+      updatedAt: new Date(remote.created_at || Date.now()),
+    });
+
+    const { data: items } = await supabase.from('sale_items').select('*').eq('sale_id', remote.id);
+    for (const item of items ?? []) {
+      const sku = productSkuByLocalId.get(item.product_id);
+      if (!sku) {
+        logWarn('Skipping item — product not in local DB', 'fetchSalesFromCloud', { saleId: remote.id, productId: item.product_id });
+        continue;
+      }
+      await db.saleItems.add({
+        saleId: localSaleId,
+        productId: sku,
+        quantity: item.quantity,
+        pricePerUnitUsd: Number(item.price_per_unit_usd),
+        localId: item.id,
+        syncUuid: item.local_uuid || crypto.randomUUID(),
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        createdAt: new Date(remote.created_at || Date.now()),
+        updatedAt: new Date(remote.created_at || Date.now()),
+      });
+    }
+
+    const { data: payments } = await supabase.from('payments').select('*').eq('sale_id', remote.id);
+    for (const p of payments ?? []) {
+      await db.payments.add({
+        saleId: localSaleId,
+        method: p.method,
+        amount: Number(p.amount),
+        referenceCode: p.reference_code || undefined,
+        localId: p.id,
+        syncUuid: p.local_uuid || crypto.randomUUID(),
+        syncStatus: SyncStatus.SYNCED,
+        lastSyncAt: new Date(),
+        createdAt: new Date(remote.created_at || Date.now()),
+        updatedAt: new Date(remote.created_at || Date.now()),
+      });
+    }
+
+    inserted++;
+  }
+  logInfo(`Inserted ${inserted} sales from cloud`, 'fetchSalesFromCloud');
+  return inserted;
+}
+
+// Pull inventory movements from Supabase. Movements have no `local_uuid`
+// for idempotency, so we follow the same clear+reinsert pattern as
+// products. Movements whose product no longer exists locally are skipped.
+export async function fetchInventoryMovementsFromCloud(): Promise<number> {
+  const { data, error } = await supabase
+    .from('inventory_movements')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`fetchInventoryMovementsFromCloud failed: ${error.message}`);
+  if (!data) return 0;
+
+  const productIdByLocalId = new Map<string, number>();
+  for (const p of await db.products.toArray()) {
+    if (p.localId && p.id !== undefined) productIdByLocalId.set(p.localId, p.id);
+  }
+
+  await db.inventoryMovements.clear();
+
+  let inserted = 0;
+  for (const m of data) {
+    const localProductId = productIdByLocalId.get(m.product_id);
+    if (localProductId === undefined) continue;
+    await db.inventoryMovements.add({
+      productId: localProductId,
+      productSku: m.product_sku,
+      productName: m.product_name,
+      type: m.type,
+      quantity: m.quantity,
+      previousStock: m.previous_stock,
+      newStock: m.new_stock,
+      notes: m.notes || undefined,
+      createdBy: m.created_by || undefined,
+      createdAt: new Date(m.created_at || Date.now()),
+    });
+    inserted++;
+  }
+  logInfo(`Inserted ${inserted} inventory movements from cloud`, 'fetchInventoryMovementsFromCloud');
+  return inserted;
 }
 
 // Full sync (bidirectional)
@@ -663,10 +973,12 @@ export async function detectDuplicateSales(): Promise<{
 export async function getDetailedSyncStatus(): Promise<{
   local: {
     products: { total: number; synced: number; pending: number; error: number };
+    customers: { total: number; synced: number; pending: number; error: number };
     sales: { total: number; synced: number; pending: number; error: number };
   };
   cloud: {
     products: number;
+    customers: number;
     sales: number;
   };
   duplicates: {
@@ -677,17 +989,24 @@ export async function getDetailedSyncStatus(): Promise<{
   
   try {
     // Local stats
-    const [localProducts, localSales] = await Promise.all([
+    const [localProducts, localCustomers, localSales] = await Promise.all([
       db.products.toArray(),
+      db.customers.toArray(),
       db.sales.toArray(),
     ]);
-    
+
     const localStats = {
       products: {
         total: localProducts.length,
         synced: localProducts.filter(p => p.syncStatus === SyncStatus.SYNCED).length,
         pending: localProducts.filter(p => p.syncStatus === SyncStatus.PENDING).length,
         error: localProducts.filter(p => p.syncStatus === SyncStatus.ERROR).length,
+      },
+      customers: {
+        total: localCustomers.length,
+        synced: localCustomers.filter(c => c.syncStatus === SyncStatus.SYNCED).length,
+        pending: localCustomers.filter(c => c.syncStatus === SyncStatus.PENDING).length,
+        error: localCustomers.filter(c => c.syncStatus === SyncStatus.ERROR).length,
       },
       sales: {
         total: localSales.length,
@@ -696,15 +1015,17 @@ export async function getDetailedSyncStatus(): Promise<{
         error: localSales.filter(s => s.syncStatus === SyncStatus.ERROR).length,
       },
     };
-    
+
     // Cloud stats
-    const [productsResult, salesResult] = await Promise.all([
+    const [productsResult, customersResult, salesResult] = await Promise.all([
       supabase.from('products').select('*', { count: 'exact', head: true }),
+      supabase.from('customers').select('*', { count: 'exact', head: true }),
       supabase.from('sales').select('*', { count: 'exact', head: true }),
     ]);
-    
+
     const cloudStats = {
       products: productsResult.count || 0,
+      customers: customersResult.count || 0,
       sales: salesResult.count || 0,
     };
     
@@ -791,11 +1112,16 @@ export async function bidirectionalSync(): Promise<{
     }
     uploaded = uploadResult.synced;
 
-    // 2. Descargar datos nuevos de la nube
+    // 2. Descargar datos nuevos de la nube. Order matters: products and
+    // customers must land first because sales/items reference them.
     logInfo('Fetching data from cloud', 'bidirectionalSync');
     try {
-      downloaded = await fetchProductsFromCloud();
-      logInfo('Download completed', 'bidirectionalSync', { downloaded });
+      const products = await fetchProductsFromCloud();
+      const customers = await fetchCustomersFromCloud();
+      const sales = await fetchSalesFromCloud();
+      const movements = await fetchInventoryMovementsFromCloud();
+      downloaded = products + customers + sales + movements;
+      logInfo('Download completed', 'bidirectionalSync', { products, customers, sales, movements });
     } catch (downloadError) {
       const errorMsg = downloadError instanceof Error ? downloadError.message : 'Download failed';
       errors.push(errorMsg);
