@@ -67,11 +67,12 @@ export function useFinanzasVZLA() {
   const [margenGlobal, setMargenGlobal] = useState<number>(30);
   
   // Obtener configuración activa de la BD
+  // Nota: esActiva es boolean y IDB no indexa booleans; usamos filter() a nivel JS.
   const configActiva = useLiveQuery(
-    () => db.configuracionCambiaria
-      .where('esActiva')
-      .equals(1)
-      .first(),
+    async () => {
+      const all = await db.configuracionCambiaria.toArray();
+      return all.find(c => c.esActiva) ?? undefined;
+    },
     []
   );
   
@@ -268,10 +269,9 @@ export function useFinanzasVZLA() {
   const guardarConfiguracion = useCallback(async (config: Omit<ConfiguracionCambiaria, 'id' | 'createdAt' | 'updatedAt'>): Promise<number> => {
     const now = new Date();
     
-    // Desactivar configuración anterior
+    // Desactivar configuración anterior (filter porque boolean no es indexable en IDB)
     await db.configuracionCambiaria
-      .where('esActiva')
-      .equals(1)
+      .filter(c => c.esActiva)
       .modify({ esActiva: false, updatedAt: now });
     
     // Crear nueva configuración

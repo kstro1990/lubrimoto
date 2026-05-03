@@ -1,21 +1,24 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from 'react';
-import { 
-  Calculator, 
-  TrendingUp, 
-  TrendingDown, 
-  AlertTriangle, 
-  DollarSign, 
+import React, { useState, useEffect } from 'react';
+import {
+  Calculator,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  DollarSign,
   RefreshCcw,
   Save,
   History,
   Percent,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Wifi,
+  Clock,
 } from 'lucide-react';
 import { useFinanzasVZLA, CalculoOutput } from '@/app/_hooks/useFinanzasVZLA';
+import { useSincronizacionTasas } from '@/app/_hooks/useSincronizacionTasas';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, Product } from '@/app/_db/db';
+import { db } from '@/app/_db/db';
 import { useNotifications } from '@/app/_components/NotificationProvider';
 import { useTasas } from '@/app/_contexts/TasasContext';
 
@@ -28,7 +31,7 @@ interface ProductoCalculoRow {
   sku: string;
   nombre: string;
   costoUSD: number;
-  calculo?: CalculoOutput;
+  sinCosto: boolean;
 }
 
 // ============================================================================
@@ -70,7 +73,7 @@ const CurrencyInput: React.FC<CurrencyInputProps> = ({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/[^0-9.]/g, '');
     setDisplayValue(rawValue);
-    
+
     const numValue = parseFloat(rawValue);
     if (!isNaN(numValue)) {
       let finalValue = numValue;
@@ -133,65 +136,83 @@ export default function CalculadoraPreciosVZLA() {
     factorProteccionActual,
     brechaActual,
     calcularPrecio,
-    calcularMultiplesProductos,
     formatearBs,
     formatearUSD,
     formatearPorcentaje,
     formatearNumero,
     guardarConfiguracion,
     registrarTasaHistorial,
+    configActiva,
+    historialTasas,
   } = useFinanzasVZLA();
+
+  const {
+    sincronizar,
+    estaCargando: sincronizando,
+    formatoTiempoTranscurrido,
+    ultimaSincronizacion,
+  } = useSincronizacionTasas();
 
   const { success, error: showError } = useNotifications();
   const { tasas, recargarTasas } = useTasas();
-  
-  // Obtener productos de la base de datos
+
   const productosDB = useLiveQuery(() => db.products.toArray(), []);
-  
-  // Estado de productos para cálculo
+
   const [productos, setProductos] = useState<ProductoCalculoRow[]>([]);
   const [calculos, setCalculos] = useState<CalculoOutput[]>([]);
   const [showHistorial, setShowHistorial] = useState(false);
   const [tasasSincronizadas, setTasasSincronizadas] = useState(false);
+  const [origenTasas, setOrigenTasas] = useState<'api' | 'config' | 'manual'>('manual');
 
-  // Sincronizar tasas del contexto global con el estado local
+  // Priority 1: load from saved config (fires when Dexie resolves)
+  useEffect(() => {
+    if (configActiva) {
+      setTasaBCV(configActiva.tasaBCV);
+      setTasaParalelo(configActiva.tasaParalelo);
+      setMargenGlobal(configActiva.margenGlobal);
+      setOrigenTasas('config');
+      setTasasSincronizadas(true);
+    }
+  }, [configActiva, setTasaBCV, setTasaParalelo, setMargenGlobal]);
+
+  // Priority 2: fallback to context rates if no saved config
   useEffect(() => {
     if (tasas && !tasasSincronizadas) {
       setTasaBCV(tasas.bcv);
       setTasaParalelo(tasas.paralelo);
       setTasasSincronizadas(true);
+      setOrigenTasas('api');
     }
   }, [tasas, tasasSincronizadas, setTasaBCV, setTasaParalelo]);
 
-  // Recargar tasas al montar el componente
+  // Recargar tasas del contexto al montar
   useEffect(() => {
     recargarTasas();
   }, [recargarTasas]);
 
-  // Inicializar productos desde la BD
+  // Construir filas de productos desde la BD
   useEffect(() => {
     if (productosDB) {
-      const productosInicial = productosDB.map(p => ({
+      setProductos(productosDB.map(p => ({
         id: p.id!,
         sku: p.sku,
         nombre: p.name,
         costoUSD: p.costUsd || 0,
-      }));
-      setProductos(productosInicial);
+        sinCosto: !p.costUsd || p.costUsd === 0,
+      })));
     }
   }, [productosDB]);
 
-  // Recalcular cuando cambian tasas o margen
+  // Recalcular cuando cambian tasas, margen o productos
   useEffect(() => {
-    const nuevosCalculos = productos.map(p => 
+    setCalculos(productos.map(p =>
       calcularPrecio({
         costoUSD: p.costoUSD,
         margenPorcentaje: margenGlobal,
         tasaBCV,
         tasaParalelo,
       })
-    );
-    setCalculos(nuevosCalculos);
+    ));
   }, [productos, tasaBCV, tasaParalelo, margenGlobal, calcularPrecio]);
 
   // ============================================================================
@@ -199,9 +220,9 @@ export default function CalculadoraPreciosVZLA() {
   // ============================================================================
 
   const handleCostoChange = (index: number, nuevoCosto: number) => {
-    const nuevosProductos = [...productos];
-    nuevosProductos[index].costoUSD = nuevoCosto;
-    setProductos(nuevosProductos);
+    const nuevos = [...productos];
+    nuevos[index] = { ...nuevos[index], costoUSD: nuevoCosto, sinCosto: nuevoCosto === 0 };
+    setProductos(nuevos);
   };
 
   const handleGuardarConfiguracion = async () => {
@@ -213,8 +234,9 @@ export default function CalculadoraPreciosVZLA() {
         fecha: new Date(),
         esActiva: true,
       });
+      setOrigenTasas('config');
       success('Configuración guardada', 'Las tasas y margen han sido guardados');
-    } catch (err) {
+    } catch {
       showError('Error', 'No se pudo guardar la configuración');
     }
   };
@@ -223,38 +245,59 @@ export default function CalculadoraPreciosVZLA() {
     try {
       await registrarTasaHistorial(tasaBCV, tasaParalelo, 'Manual');
       success('Tasa registrada', 'La tasa ha sido guardada en el historial');
-    } catch (err) {
+    } catch {
       showError('Error', 'No se pudo registrar la tasa');
     }
   };
 
+  const handleSincronizarDesdeAPI = async () => {
+    try {
+      const resultado = await sincronizar();
+      setTasaBCV(resultado.tasas.bcv);
+      setTasaParalelo(resultado.tasas.paralelo);
+      setTasasSincronizadas(true);
+      setOrigenTasas('api');
+      success(
+        'Tasas actualizadas',
+        `BCV: ${resultado.tasas.bcv.toFixed(2)} | Paralelo: ${resultado.tasas.paralelo.toFixed(2)}${resultado.desdeCache ? ' (desde caché)' : ''}`
+      );
+    } catch (err: any) {
+      showError('Error', err.message || 'No se pudo sincronizar las tasas');
+    }
+  };
+
   // ============================================================================
-  // ESTADÍSTICAS
+  // ESTADÍSTICAS (excluye productos sin costo)
   // ============================================================================
 
   const estadisticas = React.useMemo(() => {
-    if (calculos.length === 0) return null;
-    
-    const gananciasReales = calculos.map(c => c.gananciaRealUSD);
-    const promedioGanancia = gananciasReales.reduce((a, b) => a + b, 0) / gananciasReales.length;
-    
+    const calculosValidos = calculos.filter((_, i) => !productos[i]?.sinCosto);
+    if (calculosValidos.length === 0) return null;
+
     return {
-      totalProductos: calculos.length,
-      productosConPerdida: calculos.filter(c => c.esPerdida).length,
-      productosGananciaBaja: calculos.filter(c => c.esGananciaBaja).length,
-      promedioGananciaReal: promedioGanancia,
-      perdidaTotalPorBrecha: calculos.reduce((sum, c) => sum + c.perdidaPorBrechaUSD, 0),
+      totalProductos: calculosValidos.length,
+      productosSinCosto: productos.filter(p => p.sinCosto).length,
+      productosConPerdida: calculosValidos.filter(c => c.esPerdida).length,
+      productosGananciaBaja: calculosValidos.filter(c => c.esGananciaBaja).length,
+      promedioGananciaReal: calculosValidos.reduce((a, c) => a + c.gananciaRealUSD, 0) / calculosValidos.length,
+      perdidaTotalPorBrecha: calculosValidos.reduce((sum, c) => sum + c.perdidaPorBrechaUSD, 0),
     };
-  }, [calculos]);
+  }, [calculos, productos]);
 
   // ============================================================================
   // RENDER
   // ============================================================================
 
+  const origenLabel = {
+    api: { icon: <Wifi className="h-3 w-3 mr-1 text-green-500" />, text: `Desde API · ${formatoTiempoTranscurrido()}` },
+    config: { icon: <Save className="h-3 w-3 mr-1 text-blue-500" />, text: 'Desde configuración guardada' },
+    manual: { icon: <AlertTriangle className="h-3 w-3 mr-1 text-yellow-500" />, text: 'Ingresado manualmente' },
+  }[origenTasas];
+
   return (
     <div className="container mx-auto p-4 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Calculator className="h-8 w-8 text-blue-600" />
           <div>
@@ -265,6 +308,18 @@ export default function CalculadoraPreciosVZLA() {
           </div>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={handleSincronizarDesdeAPI}
+            disabled={sincronizando}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50"
+          >
+            {sincronizando ? (
+              <RefreshCcw className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Wifi className="h-4 w-4 mr-2" />
+            )}
+            {sincronizando ? 'Sincronizando...' : 'Sincronizar API'}
+          </button>
           <button
             onClick={() => setShowHistorial(!showHistorial)}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
@@ -281,7 +336,7 @@ export default function CalculadoraPreciosVZLA() {
           <ArrowRightLeft className="h-5 w-5 mr-2" />
           Configuración Cambiaria
         </h2>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Tasa BCV */}
           <div>
@@ -290,7 +345,7 @@ export default function CalculadoraPreciosVZLA() {
             </label>
             <CurrencyInput
               value={tasaBCV}
-              onChange={setTasaBCV}
+              onChange={(v) => { setTasaBCV(v); setOrigenTasas('manual'); }}
               prefix="Bs."
               step={0.01}
               className="bg-white"
@@ -304,7 +359,7 @@ export default function CalculadoraPreciosVZLA() {
             </label>
             <CurrencyInput
               value={tasaParalelo}
-              onChange={setTasaParalelo}
+              onChange={(v) => { setTasaParalelo(v); setOrigenTasas('manual'); }}
               prefix="Bs."
               step={0.01}
               className="bg-white"
@@ -332,8 +387,14 @@ export default function CalculadoraPreciosVZLA() {
           </div>
         </div>
 
+        {/* Origen de las tasas */}
+        <p className="mt-2 text-xs text-gray-500 flex items-center">
+          {origenLabel.icon}
+          {origenLabel.text}
+        </p>
+
         {/* Margen Global */}
-        <div className="mt-4 flex items-end gap-4">
+        <div className="mt-4 flex items-end gap-4 flex-wrap">
           <div className="w-48">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               <Percent className="h-4 w-4 inline mr-1" />
@@ -349,7 +410,7 @@ export default function CalculadoraPreciosVZLA() {
               className="bg-white"
             />
           </div>
-          
+
           <div className="flex gap-2">
             <button
               onClick={handleGuardarConfiguracion}
@@ -362,12 +423,63 @@ export default function CalculadoraPreciosVZLA() {
               onClick={handleRegistrarTasa}
               className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
             >
-              <RefreshCcw className="h-4 w-4 mr-2" />
+              <Clock className="h-4 w-4 mr-2" />
               Registrar Tasa
             </button>
           </div>
         </div>
       </div>
+
+      {/* Historial de Tasas */}
+      {showHistorial && (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+              <History className="h-5 w-5 mr-2" />
+              Historial de Tasas
+            </h3>
+            {historialTasas && (
+              <span className="text-sm text-gray-500">{historialTasas.length} registros</span>
+            )}
+          </div>
+          {!historialTasas || historialTasas.length === 0 ? (
+            <p className="px-6 py-8 text-center text-gray-500">
+              No hay tasas registradas aún. Usa "Registrar Tasa" o "Sincronizar API".
+            </p>
+          ) : (
+            <div className="overflow-x-auto max-h-64 overflow-y-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">BCV</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Paralelo</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Brecha</th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Fuente</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {historialTasas.map((t) => (
+                    <tr key={t.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 text-gray-900 whitespace-nowrap">
+                        {new Date(t.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: '2-digit' })} {t.hora}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono">{formatearNumero(t.tasaBCV, 2)}</td>
+                      <td className="px-4 py-2 text-right font-mono">{formatearNumero(t.tasaParalelo, 2)}</td>
+                      <td className={`px-4 py-2 text-right font-medium ${t.brecha > 5 ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatearPorcentaje(t.brecha, 2)}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{t.fuente || 'Manual'}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Estadísticas */}
       {estadisticas && (
@@ -375,6 +487,11 @@ export default function CalculadoraPreciosVZLA() {
           <div className="bg-white p-4 rounded-lg shadow-sm border">
             <p className="text-sm text-gray-600">Productos</p>
             <p className="text-2xl font-bold">{estadisticas.totalProductos}</p>
+            {estadisticas.productosSinCosto > 0 && (
+              <p className="text-xs text-yellow-600 mt-1">
+                +{estadisticas.productosSinCosto} sin costo definido
+              </p>
+            )}
           </div>
           <div className={`p-4 rounded-lg shadow-sm border ${estadisticas.productosConPerdida > 0 ? 'bg-red-50 border-red-200' : 'bg-white'}`}>
             <p className="text-sm text-gray-600">Con Pérdida</p>
@@ -405,7 +522,7 @@ export default function CalculadoraPreciosVZLA() {
             Cálculo de Precios por Producto
           </h3>
         </div>
-        
+
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -416,7 +533,7 @@ export default function CalculadoraPreciosVZLA() {
                   <span title="Costo ajustado por brecha cambiaria: Costo × (Paralelo/BCV)">Precio Idea ($)</span>
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Base ($)</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Bs (Protegido)</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Precio en Bs.</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ganancia Real</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
               </tr>
@@ -431,10 +548,39 @@ export default function CalculadoraPreciosVZLA() {
               ) : (
                 productos.map((producto, index) => {
                   const calculo = calculos[index];
+
+                  // Producto sin costo definido
+                  if (producto.sinCosto) {
+                    return (
+                      <tr key={producto.id} className="bg-gray-50">
+                        <td className="px-4 py-3">
+                          <div>
+                            <p className="text-sm font-medium text-gray-500">{producto.nombre}</p>
+                            <p className="text-xs text-gray-400 font-mono">{producto.sku}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <CurrencyInput
+                            value={producto.costoUSD}
+                            onChange={(value) => handleCostoChange(index, value)}
+                            prefix="$"
+                            className="w-32"
+                          />
+                        </td>
+                        <td colSpan={5} className="px-4 py-3 text-center">
+                          <span className="inline-flex items-center text-xs text-yellow-700 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            Sin costo definido — ingresa el costo para ver los cálculos
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   if (!calculo) return null;
 
                   return (
-                    <tr 
+                    <tr
                       key={producto.id}
                       className={calculo.esPerdida ? 'bg-red-50' : calculo.esGananciaBaja ? 'bg-yellow-50' : 'hover:bg-gray-50'}
                     >
@@ -453,7 +599,7 @@ export default function CalculadoraPreciosVZLA() {
                         />
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <p 
+                        <p
                           className={`text-sm font-medium ${calculo.precioIdeaMenorAlCosto ? 'text-red-600' : 'text-blue-600'}`}
                           title={`Costo ajustado por brecha: $${producto.costoUSD.toFixed(2)} × ${calculo.factorProteccion.toFixed(4)} = $${calculo.precioIdea.toFixed(2)}`}
                         >
@@ -478,12 +624,20 @@ export default function CalculadoraPreciosVZLA() {
                         </p>
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <p className="text-sm font-bold text-gray-900">
-                          {formatearBs(calculo.precioVentaBsProtegido)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Sin protección: {formatearBs(calculo.precioVentaBsSinProteccion)}
-                        </p>
+                        <div className="space-y-1">
+                          <div>
+                            <p className="text-xs font-medium text-indigo-700">Con protección</p>
+                            <p className="text-sm font-bold text-gray-900">
+                              {formatearBs(calculo.precioVentaBsProtegido)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-gray-500">Sin protección</p>
+                            <p className="text-sm text-gray-700">
+                              {formatearBs(calculo.precioVentaBsSinProteccion)}
+                            </p>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-4 text-right">
                         <p className={`text-sm font-medium ${calculo.gananciaRealUSD < 0 ? 'text-red-600' : 'text-green-600'}`}>
@@ -521,37 +675,37 @@ export default function CalculadoraPreciosVZLA() {
       </div>
 
       {/* Panel de Análisis Detallado */}
-      {calculos.length > 0 && (
+      {calculos.filter((_, i) => !productos[i]?.sinCosto).length > 0 && (
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Análisis de Impacto de la Brecha Cambiaria
           </h3>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-blue-50 rounded-lg p-4">
               <h4 className="text-sm font-medium text-blue-900 mb-2">Sin Brecha (Ideal)</h4>
               <p className="text-2xl font-bold text-blue-600">
-                {formatearUSD(calculos.reduce((sum, c) => sum + c.gananciaEsperadaUSD, 0))}
+                {formatearUSD(calculos.filter((_, i) => !productos[i]?.sinCosto).reduce((sum, c) => sum + c.gananciaEsperadaUSD, 0))}
               </p>
               <p className="text-sm text-blue-700">
                 Ganancia total esperada
               </p>
             </div>
-            
+
             <div className="bg-green-50 rounded-lg p-4">
               <h4 className="text-sm font-medium text-green-900 mb-2">Con Protección</h4>
               <p className="text-2xl font-bold text-green-600">
-                {formatearUSD(calculos.reduce((sum, c) => sum + c.gananciaRealUSD, 0))}
+                {formatearUSD(calculos.filter((_, i) => !productos[i]?.sinCosto).reduce((sum, c) => sum + c.gananciaRealUSD, 0))}
               </p>
               <p className="text-sm text-green-700">
                 Ganancia real con factor de protección
               </p>
             </div>
-            
+
             <div className="bg-red-50 rounded-lg p-4">
               <h4 className="text-sm font-medium text-red-900 mb-2">Pérdida por Brecha</h4>
               <p className="text-2xl font-bold text-red-600">
-                {formatearUSD(calculos.reduce((sum, c) => sum + c.perdidaPorBrechaUSD, 0))}
+                {formatearUSD(calculos.filter((_, i) => !productos[i]?.sinCosto).reduce((sum, c) => sum + c.perdidaPorBrechaUSD, 0))}
               </p>
               <p className="text-sm text-red-700">
                 Pérdida total por diferencial cambiario
