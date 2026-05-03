@@ -127,8 +127,36 @@ export default function InventarioPage() {
 
   const handleProductSubmit = async (productData: Product) => {
     try {
-      if (productModalMode === 'edit' && selectedProduct) {
-        // Check if SKU changed and if new SKU exists
+      if (productModalMode === 'create') {
+        await db.transaction('rw', db.products, db.inventoryMovements, async () => {
+          const existing = await db.products.where('sku').equals(productData.sku).first();
+          if (existing) {
+            throw new Error(`El SKU "${productData.sku}" ya existe.`);
+          }
+
+          const productToAdd = { ...productData, createdAt: new Date(), updatedAt: new Date() };
+          const id = await db.products.add(productToAdd);
+
+          await db.inventoryMovements.add({
+            productId: id as number,
+            productSku: productToAdd.sku,
+            productName: productToAdd.name,
+            type: MovementType.INITIAL,
+            quantity: productData.stockQuantity,
+            previousStock: 0,
+            newStock: productData.stockQuantity,
+            notes: 'Producto creado',
+            createdBy: 'Usuario',
+            createdAt: new Date(),
+          });
+        });
+
+        success(
+          'Producto Creado',
+          `"${productData.name}" ha sido agregado al inventario exitosamente`,
+          4000
+        );
+      } else if (productModalMode === 'edit' && selectedProduct) {
         if (productData.sku !== selectedProduct.sku) {
           const existing = await db.products.where('sku').equals(productData.sku).first();
           if (existing) {
@@ -138,19 +166,19 @@ export default function InventarioPage() {
         }
 
         await db.products.update(selectedProduct.id!, productData);
-        
+
         success(
           'Producto Actualizado',
           `"${productData.name}" ha sido actualizado exitosamente`,
           4000
         );
       }
-      
+
       setIsProductModalOpen(false);
       setSelectedProduct(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving product:', err);
-      showError('Error', 'No se pudo guardar el producto', 3000);
+      showError('Error', err.message || 'No se pudo guardar el producto', 3000);
     }
   };
 
