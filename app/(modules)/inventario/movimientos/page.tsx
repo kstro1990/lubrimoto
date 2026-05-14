@@ -2,35 +2,54 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, InventoryMovement, MovementType, Product } from '@/app/_db/db';
-import { ArrowLeft, ArrowUp, ArrowDown, Minus, Calendar, Package, Filter, Search } from 'lucide-react';
+import { db, InventoryMovement, MovementType } from '@/app/_db/db';
+import {
+  ArrowLeft,
+  ArrowUp,
+  ArrowDown,
+  Minus,
+  Calendar,
+  Package,
+  Filter,
+  Search,
+  History,
+} from 'lucide-react';
 import Link from 'next/link';
+import { TOKENS } from '@/app/_components/_pmTheme';
 
-const MOVEMENT_TYPE_LABELS: Record<MovementType, { label: string; color: string; icon: React.ReactNode }> = {
-  [MovementType.SALE]: { 
-    label: 'Venta', 
-    color: 'text-red-600 bg-red-100',
-    icon: <ArrowDown className="h-4 w-4" />
+const MOVEMENT_META: Record<
+  MovementType,
+  { label: string; color: string; bg: string; icon: React.ReactNode }
+> = {
+  [MovementType.SALE]: {
+    label: 'Venta',
+    color: TOKENS.red,
+    bg: TOKENS.redSoft,
+    icon: <ArrowDown className="h-3 w-3" />,
   },
-  [MovementType.PURCHASE]: { 
-    label: 'Compra', 
-    color: 'text-green-600 bg-green-100',
-    icon: <ArrowUp className="h-4 w-4" />
+  [MovementType.PURCHASE]: {
+    label: 'Compra',
+    color: TOKENS.green,
+    bg: TOKENS.greenSoft,
+    icon: <ArrowUp className="h-3 w-3" />,
   },
-  [MovementType.ADJUSTMENT]: { 
-    label: 'Ajuste', 
-    color: 'text-blue-600 bg-blue-100',
-    icon: <Minus className="h-4 w-4" />
+  [MovementType.ADJUSTMENT]: {
+    label: 'Ajuste',
+    color: TOKENS.charcoal,
+    bg: TOKENS.slate100,
+    icon: <Minus className="h-3 w-3" />,
   },
-  [MovementType.INITIAL]: { 
-    label: 'Stock Inicial', 
-    color: 'text-gray-600 bg-gray-100',
-    icon: <Package className="h-4 w-4" />
+  [MovementType.INITIAL]: {
+    label: 'Stock Inicial',
+    color: TOKENS.slate700,
+    bg: TOKENS.slate100,
+    icon: <Package className="h-3 w-3" />,
   },
-  [MovementType.RETURN]: { 
-    label: 'Devolución', 
-    color: 'text-purple-600 bg-purple-100',
-    icon: <ArrowUp className="h-4 w-4" />
+  [MovementType.RETURN]: {
+    label: 'Devolución',
+    color: TOKENS.orange,
+    bg: TOKENS.orangeSoft,
+    icon: <ArrowUp className="h-3 w-3" />,
   },
 };
 
@@ -42,234 +61,332 @@ export default function MovementsPage() {
 
   const movements = useLiveQuery(
     () => db.inventoryMovements.orderBy('createdAt').reverse().toArray(),
-    []
+    [],
   );
 
-  const products = useLiveQuery(
-    () => db.products.toArray(),
-    []
-  );
+  const products = useLiveQuery(() => db.products.toArray(), []);
 
   useEffect(() => {
     if (!movements) return;
 
     let filtered = movements;
 
-    // Filter by product
     if (selectedProduct !== 'all') {
-      filtered = filtered.filter(m => m.productId === selectedProduct);
+      filtered = filtered.filter((m) => m.productId === selectedProduct);
     }
-
-    // Filter by type
     if (selectedType !== 'all') {
-      filtered = filtered.filter(m => m.type === selectedType);
+      filtered = filtered.filter((m) => m.type === selectedType);
     }
-
-    // Filter by search term
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(m =>
-        m.productName.toLowerCase().includes(term) ||
-        m.productSku.toLowerCase().includes(term) ||
-        m.notes?.toLowerCase().includes(term)
+      filtered = filtered.filter(
+        (m) =>
+          m.productName.toLowerCase().includes(term) ||
+          m.productSku.toLowerCase().includes(term) ||
+          m.notes?.toLowerCase().includes(term),
       );
     }
 
     setFilteredMovements(filtered);
   }, [movements, selectedProduct, selectedType, searchTerm]);
 
-  const getProductName = (productId: number) => {
-    const product = products?.find(p => p.id === productId);
-    return product?.name || 'Producto desconocido';
-  };
-
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleString('es-ES', {
+  const formatDate = (date: Date) =>
+    new Date(date).toLocaleString('es-ES', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     });
-  };
 
   return (
-    <div className="container mx-auto p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center">
-          <Link
-            href="/inventario"
-            className="mr-4 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+    <div className="min-h-screen">
+      <div className="max-w-[1440px] mx-auto px-6 py-6 space-y-5">
+        {/* Header */}
+        <div className="flex items-end justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/inventario"
+              className="inline-flex items-center justify-center h-9 w-9 rounded transition-colors"
+              style={{
+                background: '#fff',
+                border: `1px solid ${TOKENS.slate200}`,
+                color: TOKENS.slate500,
+              }}
+              aria-label="Volver al inventario"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <div>
+              <div className="pm-eyebrow mb-1">Operaciones / Inventario</div>
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="flex items-center justify-center h-9 w-9 rounded"
+                  style={{ background: TOKENS.charcoal, color: '#fff' }}
+                >
+                  <History className="h-4 w-4" />
+                </div>
+                <div>
+                  <h1
+                    className="text-[24px] font-bold leading-8 tracking-[-0.02em]"
+                    style={{ color: TOKENS.charcoal }}
+                  >
+                    Historial de Movimientos
+                  </h1>
+                  <p className="text-[13px]" style={{ color: TOKENS.slate500 }}>
+                    Registro de todos los cambios en el inventario
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <span className="pm-eyebrow pm-tnum">
+            {movements ? `${movements.length} movimientos` : 'Cargando…'}
+          </span>
+        </div>
+
+        {/* Filters */}
+        <section className="pm-card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Filter className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
+            <span className="pm-eyebrow" style={{ color: TOKENS.slate700 }}>
+              Filtros
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="pm-label">
+                <Search className="h-3 w-3 inline mr-1" />
+                Buscar
+              </label>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Producto, SKU o notas…"
+                className="pm-input"
+              />
+            </div>
+
+            <div>
+              <label className="pm-label">
+                <Package className="h-3 w-3 inline mr-1" />
+                Producto
+              </label>
+              <select
+                value={selectedProduct}
+                onChange={(e) =>
+                  setSelectedProduct(e.target.value === 'all' ? 'all' : parseInt(e.target.value))
+                }
+                className="pm-input"
+              >
+                <option value="all">Todos los productos</option>
+                {products?.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="pm-label">Tipo de Movimiento</label>
+              <select
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value as MovementType | 'all')}
+                className="pm-input"
+              >
+                <option value="all">Todos los tipos</option>
+                {Object.entries(MOVEMENT_META).map(([type, config]) => (
+                  <option key={type} value={type}>
+                    {config.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </section>
+
+        {/* Table */}
+        <section className="pm-card overflow-hidden">
+          <div
+            className="flex items-center justify-between px-4 py-2.5"
+            style={{
+              borderBottom: `1px solid ${TOKENS.slate200}`,
+              background: TOKENS.slate50,
+            }}
           >
-            <ArrowLeft className="h-5 w-5 text-gray-600" />
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold">Historial de Movimientos</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Registro de todos los cambios en el inventario
-            </p>
-          </div>
-        </div>
-        <div className="text-sm text-gray-600">
-          {movements ? `${movements.length} movimientos` : 'Cargando...'}
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-md mb-6">
-        <div className="flex items-center mb-4">
-          <Filter className="h-5 w-5 text-gray-500 mr-2" />
-          <h2 className="text-lg font-semibold">Filtros</h2>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Search */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              <Search className="h-4 w-4 inline mr-1" />
-              Buscar
-            </label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Producto, SKU o notas..."
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
+            <div className="flex items-center gap-2">
+              <History className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
+              <span className="pm-eyebrow" style={{ color: TOKENS.slate700 }}>
+                Movimientos
+              </span>
+            </div>
+            <span className="text-[12px] pm-tnum" style={{ color: TOKENS.slate500 }}>
+              {filteredMovements.length} filas
+            </span>
           </div>
 
-          {/* Product Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              <Package className="h-4 w-4 inline mr-1" />
-              Producto
-            </label>
-            <select
-              value={selectedProduct}
-              onChange={(e) => setSelectedProduct(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              <option value="all">Todos los productos</option>
-              {products?.map(product => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Type Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tipo de Movimiento
-            </label>
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value as MovementType | 'all')}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              <option value="all">Todos los tipos</option>
-              {Object.entries(MOVEMENT_TYPE_LABELS).map(([type, config]) => (
-                <option key={type} value={type}>
-                  {config.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Movements Table */}
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fecha
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Producto
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tipo
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Cantidad
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Stock Anterior
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Stock Nuevo
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Notas
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredMovements.length > 0 ? (
-                filteredMovements.map((movement) => {
-                  const typeConfig = MOVEMENT_TYPE_LABELS[movement.type];
-                  return (
-                    <tr key={movement.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                          {formatDate(movement.createdAt)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {movement.productName}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          SKU: {movement.productSku}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${typeConfig.color}`}>
-                          {typeConfig.icon}
-                          <span className="ml-1">{typeConfig.label}</span>
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        <span className={`font-medium ${
-                          movement.quantity > 0 ? 'text-green-600' : 
-                          movement.quantity < 0 ? 'text-red-600' : 'text-gray-600'
-                        }`}>
-                          {movement.quantity > 0 ? '+' : ''}{movement.quantity}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                        {movement.previousStock}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900">
-                        {movement.newStock}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                        {movement.notes || '-'}
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
-                    <Package className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p className="text-lg font-medium">No hay movimientos registrados</p>
-                    <p className="text-sm text-gray-400 mt-1">
-                      Los movimientos aparecerán cuando realices ventas, compras o ajustes de stock
-                    </p>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-[13px]">
+              <thead className="sticky top-0 z-10">
+                <tr style={{ background: TOKENS.slate100 }}>
+                  <Th>Fecha</Th>
+                  <Th>Producto</Th>
+                  <Th>Tipo</Th>
+                  <Th align="right">Cantidad</Th>
+                  <Th align="right">Stock Anterior</Th>
+                  <Th align="right">Stock Nuevo</Th>
+                  <Th>Notas</Th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filteredMovements.length > 0 ? (
+                  filteredMovements.map((movement) => {
+                    const meta = MOVEMENT_META[movement.type];
+                    const qtyColor =
+                      movement.quantity > 0
+                        ? TOKENS.green
+                        : movement.quantity < 0
+                        ? TOKENS.red
+                        : TOKENS.slate500;
+                    return (
+                      <tr
+                        key={movement.id}
+                        style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+                      >
+                        <Td>
+                          <div className="flex items-center gap-2">
+                            <Calendar
+                              className="h-3.5 w-3.5"
+                              style={{ color: TOKENS.slate400 }}
+                            />
+                            <span className="pm-tnum" style={{ color: TOKENS.charcoal }}>
+                              {formatDate(movement.createdAt)}
+                            </span>
+                          </div>
+                        </Td>
+                        <Td>
+                          <div
+                            className="font-semibold"
+                            style={{ color: TOKENS.charcoal }}
+                          >
+                            {movement.productName}
+                          </div>
+                          <div
+                            className="font-mono text-[11px] mt-0.5"
+                            style={{ color: TOKENS.slate500 }}
+                          >
+                            {movement.productSku}
+                          </div>
+                        </Td>
+                        <Td>
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider"
+                            style={{ background: meta.bg, color: meta.color }}
+                          >
+                            {meta.icon}
+                            {meta.label}
+                          </span>
+                        </Td>
+                        <Td align="right">
+                          <span
+                            className="pm-tnum font-bold"
+                            style={{ color: qtyColor }}
+                          >
+                            {movement.quantity > 0 ? '+' : ''}
+                            {movement.quantity}
+                          </span>
+                        </Td>
+                        <Td align="right">
+                          <span className="pm-tnum" style={{ color: TOKENS.slate500 }}>
+                            {movement.previousStock}
+                          </span>
+                        </Td>
+                        <Td align="right">
+                          <span
+                            className="pm-tnum font-bold"
+                            style={{ color: TOKENS.charcoal }}
+                          >
+                            {movement.newStock}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            className="text-[12px] max-w-xs truncate inline-block"
+                            style={{ color: TOKENS.slate500 }}
+                          >
+                            {movement.notes || '—'}
+                          </span>
+                        </Td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="py-12 text-center"
+                      style={{ color: TOKENS.slate500 }}
+                    >
+                      <Package
+                        className="h-10 w-10 mx-auto mb-3"
+                        style={{ color: TOKENS.slate300 }}
+                      />
+                      <p className="text-[14px] font-semibold mb-1">
+                        No hay movimientos registrados
+                      </p>
+                      <p className="text-[12px]">
+                        Los movimientos aparecerán cuando realices ventas, compras o
+                        ajustes de stock
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </div>
+  );
+}
+
+function Th({
+  children,
+  align = 'left',
+}: {
+  children: React.ReactNode;
+  align?: 'left' | 'right';
+}) {
+  return (
+    <th
+      className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.05em] select-none"
+      style={{
+        color: TOKENS.slate700,
+        borderBottom: `1px solid ${TOKENS.slate200}`,
+        textAlign: align,
+      }}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({
+  children,
+  align = 'left',
+}: {
+  children: React.ReactNode;
+  align?: 'left' | 'right';
+}) {
+  return (
+    <td
+      className="px-3 py-2.5 align-middle"
+      style={{ textAlign: align, color: TOKENS.charcoal }}
+    >
+      {children}
+    </td>
   );
 }

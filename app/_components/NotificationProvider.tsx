@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import { TOKENS } from './_pmTheme';
 
 export type NotificationType = 'success' | 'error' | 'warning' | 'info';
 
@@ -28,39 +29,53 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  const addNotification = useCallback((notification: Omit<Notification, 'id'>) => {
-    const id = Math.random().toString(36).substring(2, 9);
-    const newNotification = { ...notification, id };
-    
-    setNotifications((prev) => [...prev, newNotification]);
-
-    // Auto-remove after duration
-    if (notification.duration !== 0) {
-      setTimeout(() => {
-        removeNotification(id);
-      }, notification.duration || 5000);
-    }
-  }, []);
-
   const removeNotification = useCallback((id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
-  const success = useCallback((title: string, message?: string, duration?: number) => {
-    addNotification({ type: 'success', title, message: message || '', duration });
-  }, [addNotification]);
+  const addNotification = useCallback(
+    (notification: Omit<Notification, 'id'>) => {
+      const id = Math.random().toString(36).substring(2, 9);
+      const newNotification = { ...notification, id };
 
-  const error = useCallback((title: string, message?: string, duration?: number) => {
-    addNotification({ type: 'error', title, message: message || '', duration });
-  }, [addNotification]);
+      setNotifications((prev) => [...prev, newNotification]);
 
-  const warning = useCallback((title: string, message?: string, duration?: number) => {
-    addNotification({ type: 'warning', title, message: message || '', duration });
-  }, [addNotification]);
+      if (notification.duration !== 0) {
+        setTimeout(() => {
+          removeNotification(id);
+        }, notification.duration || 5000);
+      }
+    },
+    [removeNotification],
+  );
 
-  const info = useCallback((title: string, message?: string, duration?: number) => {
-    addNotification({ type: 'info', title, message: message || '', duration });
-  }, [addNotification]);
+  const success = useCallback(
+    (title: string, message?: string, duration?: number) => {
+      addNotification({ type: 'success', title, message: message || '', duration });
+    },
+    [addNotification],
+  );
+
+  const error = useCallback(
+    (title: string, message?: string, duration?: number) => {
+      addNotification({ type: 'error', title, message: message || '', duration });
+    },
+    [addNotification],
+  );
+
+  const warning = useCallback(
+    (title: string, message?: string, duration?: number) => {
+      addNotification({ type: 'warning', title, message: message || '', duration });
+    },
+    [addNotification],
+  );
+
+  const info = useCallback(
+    (title: string, message?: string, duration?: number) => {
+      addNotification({ type: 'info', title, message: message || '', duration });
+    },
+    [addNotification],
+  );
 
   return (
     <NotificationContext.Provider
@@ -87,58 +102,89 @@ function NotificationContainer({
   notifications: Notification[];
   onRemove: (id: string) => void;
 }) {
-  const getIcon = (type: NotificationType) => {
+  const getMeta = (type: NotificationType) => {
     switch (type) {
       case 'success':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
+        return {
+          icon: <CheckCircle className="w-4 h-4" />,
+          color: TOKENS.green,
+          bg: TOKENS.greenSoft,
+        };
       case 'error':
-        return <AlertCircle className="w-5 h-5 text-red-500" />;
+        return {
+          icon: <AlertCircle className="w-4 h-4" />,
+          color: TOKENS.red,
+          bg: TOKENS.redSoft,
+        };
       case 'warning':
-        return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
+        return {
+          icon: <AlertTriangle className="w-4 h-4" />,
+          color: TOKENS.amber,
+          bg: TOKENS.amberSoft,
+        };
       case 'info':
-        return <Info className="w-5 h-5 text-blue-500" />;
-    }
-  };
-
-  const getStyles = (type: NotificationType) => {
-    switch (type) {
-      case 'success':
-        return 'bg-green-50 border-green-200';
-      case 'error':
-        return 'bg-red-50 border-red-200';
-      case 'warning':
-        return 'bg-yellow-50 border-yellow-200';
-      case 'info':
-        return 'bg-blue-50 border-blue-200';
+        return {
+          icon: <Info className="w-4 h-4" />,
+          color: TOKENS.charcoal,
+          bg: TOKENS.slate100,
+        };
     }
   };
 
   return (
     <div className="fixed top-4 right-4 z-[9999] space-y-2 max-w-sm">
-      {notifications.map((notification) => (
-        <div
-          key={notification.id}
-          className={`flex items-start gap-3 p-4 rounded-lg shadow-lg border ${getStyles(
-            notification.type
-          )} transform transition-all duration-300 animate-in slide-in-from-right`}
-          role="alert"
-        >
-          <div className="flex-shrink-0">{getIcon(notification.type)}</div>
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-semibold text-gray-900">{notification.title}</h4>
-            {notification.message && (
-              <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
-            )}
-          </div>
-          <button
-            onClick={() => onRemove(notification.id)}
-            className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-            aria-label="Cerrar notificación"
+      {notifications.map((notification) => {
+        const meta = getMeta(notification.type);
+        return (
+          <div
+            key={notification.id}
+            className="flex items-start gap-3 p-3 rounded pm-elevated"
+            style={{
+              background: '#fff',
+              border: `1px solid ${TOKENS.slate200}`,
+              borderLeft: `3px solid ${meta.color}`,
+            }}
+            role="alert"
           >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      ))}
+            <div
+              className="flex items-center justify-center h-7 w-7 rounded shrink-0"
+              style={{ background: meta.bg, color: meta.color }}
+            >
+              {meta.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4
+                className="text-[13px] font-bold"
+                style={{ color: TOKENS.charcoal }}
+              >
+                {notification.title}
+              </h4>
+              {notification.message && (
+                <p
+                  className="text-[12px] mt-0.5"
+                  style={{ color: TOKENS.slate500 }}
+                >
+                  {notification.message}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => onRemove(notification.id)}
+              className="shrink-0 transition-colors"
+              style={{ color: TOKENS.slate400 }}
+              aria-label="Cerrar notificación"
+              onMouseEnter={(e) =>
+                ((e.currentTarget as HTMLButtonElement).style.color = TOKENS.charcoal)
+              }
+              onMouseLeave={(e) =>
+                ((e.currentTarget as HTMLButtonElement).style.color = TOKENS.slate400)
+              }
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

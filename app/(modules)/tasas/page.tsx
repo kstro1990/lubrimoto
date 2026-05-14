@@ -3,14 +3,13 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, HistorialTasa } from '@/app/_db/db';
-import { 
-  Plus, 
-  TrendingUp, 
-  Calendar, 
+import {
+  Plus,
+  TrendingUp,
+  Calendar,
   Clock,
   Search,
   ArrowLeft,
-  MoreVertical,
   Trash2,
   Edit,
   RefreshCcw,
@@ -18,7 +17,8 @@ import {
   AlertCircle,
   Cloud,
   Wifi,
-  WifiOff
+  WifiOff,
+  DollarSign,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useNotifications } from '@/app/_components/NotificationProvider';
@@ -26,21 +26,20 @@ import { useSincronizacionTasas } from '@/app/_hooks/useSincronizacionTasas';
 import { useTasas } from '@/app/_contexts/TasasContext';
 import FormularioTasa from './components/FormularioTasa';
 import HistorialGrafico from './components/HistorialGrafico';
+import { TOKENS, PMBtnPrimary, PMBtnSecondary } from '@/app/_components/_pmTheme';
 
 export default function TasasPage() {
   const { success, error: showError } = useNotifications();
   const { actualizarTasas } = useTasas();
-  const { 
-    sincronizar, 
-    estado, 
-    resultado, 
-    error: syncError,
+  const {
+    sincronizar,
+    resultado,
     estaCargando,
     hayConexion,
     formatoTiempoTranscurrido,
-    ultimaSincronizacion 
+    ultimaSincronizacion,
   } = useSincronizacionTasas();
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingTasa, setEditingTasa] = useState<HistorialTasa | null>(null);
@@ -48,56 +47,54 @@ export default function TasasPage() {
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [mostrarResultadoSync, setMostrarResultadoSync] = useState(false);
 
-  // Obtener tasas de la base de datos
   const tasas = useLiveQuery(
     () => db.historialTasas.orderBy('fecha').reverse().toArray(),
-    []
+    [],
   );
 
-  // Filtrar tasas
   const filteredTasas = React.useMemo(() => {
     if (!tasas) return [];
-    
     let filtered = tasas;
-    
-    // Filtrar por fecha
+
     const now = new Date();
     if (dateFilter === 'today') {
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      filtered = filtered.filter(t => new Date(t.fecha) >= today);
+      filtered = filtered.filter((t) => new Date(t.fecha) >= today);
     } else if (dateFilter === 'week') {
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      filtered = filtered.filter(t => new Date(t.fecha) >= weekAgo);
+      filtered = filtered.filter((t) => new Date(t.fecha) >= weekAgo);
     } else if (dateFilter === 'month') {
       const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      filtered = filtered.filter(t => new Date(t.fecha) >= monthAgo);
+      filtered = filtered.filter((t) => new Date(t.fecha) >= monthAgo);
     }
-    
-    // Filtrar por búsqueda
+
     if (searchTerm) {
-      filtered = filtered.filter(t => 
-        t.fuente?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.fecha.toLocaleDateString().includes(searchTerm)
+      filtered = filtered.filter(
+        (t) =>
+          t.fuente?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          t.fecha.toLocaleDateString().includes(searchTerm),
       );
     }
-    
+
     return filtered;
   }, [tasas, searchTerm, dateFilter]);
 
-  // Calcular estadísticas
   const stats = React.useMemo(() => {
     if (!tasas || tasas.length === 0) return null;
-    
     const latest = tasas[0];
     const previous = tasas[1];
-    
-    const bcvChange = previous ? ((latest.tasaBCV - previous.tasaBCV) / previous.tasaBCV) * 100 : 0;
-    const paraleloChange = previous ? ((latest.tasaParalelo - previous.tasaParalelo) / previous.tasaParalelo) * 100 : 0;
-    
+
+    const bcvChange = previous
+      ? ((latest.tasaBCV - previous.tasaBCV) / previous.tasaBCV) * 100
+      : 0;
+    const paraleloChange = previous
+      ? ((latest.tasaParalelo - previous.tasaParalelo) / previous.tasaParalelo) * 100
+      : 0;
+
     const avgBCV = tasas.reduce((sum, t) => sum + t.tasaBCV, 0) / tasas.length;
     const avgParalelo = tasas.reduce((sum, t) => sum + t.tasaParalelo, 0) / tasas.length;
     const avgBrecha = tasas.reduce((sum, t) => sum + t.brecha, 0) / tasas.length;
-    
+
     return {
       latest,
       bcvChange,
@@ -109,14 +106,12 @@ export default function TasasPage() {
     };
   }, [tasas]);
 
-  // Handlers
   const handleDelete = async (id: number) => {
     if (!confirm('¿Estás seguro de eliminar esta tasa?')) return;
-    
     try {
       await db.historialTasas.delete(id);
       success('Tasa eliminada', 'El registro ha sido eliminado exitosamente');
-    } catch (err) {
+    } catch {
       showError('Error', 'No se pudo eliminar la tasa');
     }
   };
@@ -131,50 +126,44 @@ export default function TasasPage() {
     setEditingTasa(null);
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-VE', {
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('es-VE', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
-  };
 
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('es-VE', {
+  const formatDate = (date: Date) =>
+    new Date(date).toLocaleDateString('es-VE', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
-  };
 
   const handleSincronizar = async () => {
     try {
       const resultado = await sincronizar();
-      
-      // Actualizar contexto global
       actualizarTasas(resultado.tasas);
-      
-      // Mostrar notificación con comparación
+
       const { comparacion } = resultado;
       let mensaje = `BCV: Bs. ${resultado.tasas.bcv.toFixed(2)} | Paralelo: Bs. ${resultado.tasas.paralelo.toFixed(2)}`;
-      
+
       if (comparacion.bcv.cambioPorcentaje !== 0) {
         const cambioBCV = comparacion.bcv.cambioPorcentaje;
         const simboloBCV = cambioBCV > 0 ? '↑' : '↓';
         mensaje += `\nBCV ${simboloBCV} ${Math.abs(cambioBCV).toFixed(2)}%`;
       }
-      
       if (comparacion.paralelo.cambioPorcentaje !== 0) {
         const cambioPar = comparacion.paralelo.cambioPorcentaje;
         const simboloPar = cambioPar > 0 ? '↑' : '↓';
         mensaje += ` | Paralelo ${simboloPar} ${Math.abs(cambioPar).toFixed(2)}%`;
       }
-      
+
       if (resultado.desdeCache) {
         success('Sincronización completada (Cache)', resultado.mensaje || 'Usando datos en caché');
       } else {
         success('Sincronización exitosa', mensaje);
       }
-      
+
       setMostrarResultadoSync(true);
       setTimeout(() => setMostrarResultadoSync(false), 5000);
     } catch (err: any) {
@@ -182,383 +171,497 @@ export default function TasasPage() {
     }
   };
 
+  const filters = [
+    { value: 'all', label: 'Todas' },
+    { value: 'today', label: 'Hoy' },
+    { value: 'week', label: 'Última semana' },
+    { value: 'month', label: 'Último mes' },
+  ] as const;
+
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/calculadora"
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            <ArrowLeft className="h-6 w-6 text-gray-600" />
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-              <TrendingUp className="h-8 w-8 mr-3 text-blue-600" />
-              Gestión de Tasas Cambiarias
-            </h1>
-            <p className="text-gray-600">
-              Administra el historial de tasas BCV y Paralelo
-            </p>
+    <div className="min-h-screen">
+      <div className="max-w-[1440px] mx-auto px-6 py-6 space-y-5">
+        {/* Header */}
+        <div className="flex items-end justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/calculadora"
+              className="inline-flex items-center justify-center h-9 w-9 rounded transition-colors"
+              style={{
+                background: '#fff',
+                border: `1px solid ${TOKENS.slate200}`,
+                color: TOKENS.slate500,
+              }}
+              aria-label="Volver a calculadora"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <div>
+              <div className="pm-eyebrow mb-1">Finanzas / Tipo de Cambio</div>
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="flex items-center justify-center h-9 w-9 rounded"
+                  style={{ background: TOKENS.charcoal, color: '#fff' }}
+                >
+                  <DollarSign className="h-4 w-4" />
+                </div>
+                <div>
+                  <h1
+                    className="text-[24px] font-bold leading-8 tracking-[-0.02em]"
+                    style={{ color: TOKENS.charcoal }}
+                  >
+                    Gestión de Tasas Cambiarias
+                  </h1>
+                  <p className="text-[13px]" style={{ color: TOKENS.slate500 }}>
+                    Administra el historial de tasas BCV y Paralelo
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <PMBtnSecondary onClick={() => setShowHistorial(!showHistorial)}>
+              <TrendingUp className="h-4 w-4" />
+              {showHistorial ? 'Ocultar Gráfico' : 'Ver Gráfico'}
+            </PMBtnSecondary>
+            <PMBtnSecondary
+              onClick={() => {
+                setEditingTasa(null);
+                setShowForm(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              Nueva Tasa
+            </PMBtnSecondary>
+            <PMBtnPrimary onClick={handleSincronizar} disabled={estaCargando}>
+              {estaCargando ? (
+                <span
+                  className="inline-block w-3.5 h-3.5 rounded-full animate-spin"
+                  style={{
+                    border: '2px solid rgba(255,255,255,0.4)',
+                    borderTopColor: '#fff',
+                  }}
+                />
+              ) : hayConexion() ? (
+                <Cloud className="h-4 w-4" />
+              ) : (
+                <WifiOff className="h-4 w-4" />
+              )}
+              {estaCargando ? 'Sincronizando…' : 'Sincronizar API'}
+            </PMBtnPrimary>
           </div>
         </div>
-        
-        <div className="flex gap-2">
-          {/* Botón Sincronizar */}
-          <button
-            onClick={handleSincronizar}
-            disabled={estaCargando}
-            className={`inline-flex items-center px-4 py-2 border rounded-md shadow-sm text-sm font-medium transition-colors ${
-              estaCargando
-                ? 'border-gray-300 text-gray-500 bg-gray-100 cursor-not-allowed'
-                : hayConexion()
-                ? 'border-green-300 text-green-700 bg-green-50 hover:bg-green-100'
-                : 'border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100'
-            }`}
-          >
-            {estaCargando ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
-                Sincronizando...
-              </>
-            ) : (
-              <>
-                {hayConexion() ? (
-                  <Cloud className="h-4 w-4 mr-2" />
-                ) : (
-                  <WifiOff className="h-4 w-4 mr-2" />
-                )}
-                Sincronizar API
-              </>
-            )}
-          </button>
-          
-          <button
-            onClick={() => setShowHistorial(!showHistorial)}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-          >
-            <TrendingUp className="h-4 w-4 mr-2" />
-            {showHistorial ? 'Ocultar Gráfico' : 'Ver Gráfico'}
-          </button>
-          <button
-            onClick={() => {
-              setEditingTasa(null);
-              setShowForm(true);
-            }}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Nueva Tasa
-          </button>
-        </div>
-      </div>
 
-      {/* Información de última sincronización */}
-      <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-        <div className="flex items-center text-sm text-gray-600">
-          {hayConexion() ? (
-            <Wifi className="h-4 w-4 mr-2 text-green-500" />
-          ) : (
-            <WifiOff className="h-4 w-4 mr-2 text-orange-500" />
+        {/* Sync info bar */}
+        <div
+          className="flex items-center justify-between gap-3 px-4 py-2.5 rounded flex-wrap"
+          style={{ background: '#fff', border: `1px solid ${TOKENS.slate200}` }}
+        >
+          <div className="flex items-center gap-3 text-[12px]" style={{ color: TOKENS.slate500 }}>
+            <span
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider"
+              style={{
+                background: hayConexion() ? TOKENS.greenSoft : TOKENS.amberSoft,
+                color: hayConexion() ? TOKENS.green : TOKENS.amber,
+              }}
+            >
+              {hayConexion() ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+              {hayConexion() ? 'Online' : 'Offline'}
+            </span>
+            <span>
+              Última sincronización:{' '}
+              <span className="pm-tnum font-semibold" style={{ color: TOKENS.charcoal }}>
+                {ultimaSincronizacion ? formatoTiempoTranscurrido() : 'Nunca'}
+              </span>
+            </span>
+          </div>
+
+          {mostrarResultadoSync && resultado && (
+            <div className="flex items-center gap-4 text-[12px]">
+              <SyncDelta
+                label="BCV"
+                value={`Bs. ${resultado.tasas.bcv.toFixed(2)}`}
+                change={resultado.comparacion.bcv.cambioPorcentaje}
+              />
+              <SyncDelta
+                label="Paralelo"
+                value={`Bs. ${resultado.tasas.paralelo.toFixed(2)}`}
+                change={resultado.comparacion.paralelo.cambioPorcentaje}
+              />
+              {resultado.desdeCache && (
+                <span
+                  className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider"
+                  style={{ background: TOKENS.amberSoft, color: TOKENS.amber }}
+                >
+                  Cache
+                </span>
+              )}
+            </div>
           )}
-          <span>
-            {hayConexion() ? 'Conectado a internet' : 'Sin conexión - Usando cache'}
-          </span>
-          <span className="mx-2">•</span>
-          <span>
-            Última sincronización: {ultimaSincronizacion ? formatoTiempoTranscurrido() : 'Nunca'}
-          </span>
         </div>
-        
-        {/* Resultado de sincronización */}
-        {mostrarResultadoSync && resultado && (
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center">
-              <span className="font-medium text-gray-700">BCV:</span>
-              <span className={`ml-1 font-bold ${resultado.comparacion.bcv.cambioPorcentaje > 0 ? 'text-green-600' : resultado.comparacion.bcv.cambioPorcentaje < 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                Bs. {resultado.tasas.bcv.toFixed(2)}
-                {resultado.comparacion.bcv.cambioPorcentaje !== 0 && (
-                  <span className="ml-1 text-xs">
-                    ({resultado.comparacion.bcv.cambioPorcentaje > 0 ? '↑' : '↓'} {Math.abs(resultado.comparacion.bcv.cambioPorcentaje).toFixed(2)}%)
-                  </span>
-                )}
-              </span>
+
+        {/* Stats */}
+        {stats && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <StatCard
+              label="Tasa BCV (Hoy)"
+              value={`Bs. ${formatCurrency(stats.latest.tasaBCV)}`}
+              change={stats.bcvChange}
+            />
+            <StatCard
+              label="Tasa Paralelo (Hoy)"
+              value={`Bs. ${formatCurrency(stats.latest.tasaParalelo)}`}
+              change={stats.paraleloChange}
+            />
+            <BrechaCard latest={stats.latest.brecha} avg={stats.avgBrecha} />
+            <div className="pm-card px-4 py-3">
+              <div className="pm-eyebrow">Total Registros</div>
+              <div
+                className="pm-tnum text-[24px] font-bold leading-8 tracking-[-0.02em] mt-1"
+                style={{ color: TOKENS.charcoal }}
+              >
+                {stats.totalRegistros}
+              </div>
+              <div className="text-[12px] mt-0.5" style={{ color: TOKENS.slate500 }}>
+                BCV prom: Bs. {formatCurrency(stats.avgBCV)}
+              </div>
             </div>
-            <div className="flex items-center">
-              <span className="font-medium text-gray-700">Paralelo:</span>
-              <span className={`ml-1 font-bold ${resultado.comparacion.paralelo.cambioPorcentaje > 0 ? 'text-green-600' : resultado.comparacion.paralelo.cambioPorcentaje < 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                Bs. {resultado.tasas.paralelo.toFixed(2)}
-                {resultado.comparacion.paralelo.cambioPorcentaje !== 0 && (
-                  <span className="ml-1 text-xs">
-                    ({resultado.comparacion.paralelo.cambioPorcentaje > 0 ? '↑' : '↓'} {Math.abs(resultado.comparacion.paralelo.cambioPorcentaje).toFixed(2)}%)
-                  </span>
-                )}
-              </span>
-            </div>
-            {resultado.desdeCache && (
-              <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded">
-                Cache
-              </span>
-            )}
           </div>
         )}
-      </div>
 
-      {/* Estadísticas */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Tasa BCV Actual */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Tasa BCV (Hoy)</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  Bs. {formatCurrency(stats.latest.tasaBCV)}
-                </p>
-                <div className={`flex items-center mt-1 text-sm ${stats.bcvChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {stats.bcvChange >= 0 ? <TrendingUp className="h-4 w-4 mr-1" /> : <TrendingDown className="h-4 w-4 mr-1" />}
-                  {stats.bcvChange >= 0 ? '+' : ''}{stats.bcvChange.toFixed(2)}%
-                </div>
-              </div>
-              <div className="p-3 bg-green-100 rounded-full">
-                <TrendingUp className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
+        {/* Gráfico */}
+        {showHistorial && tasas && <HistorialGrafico tasas={tasas.slice(0, 30).reverse()} />}
+
+        {/* Filtros */}
+        <div
+          className="rounded p-3 flex flex-col md:flex-row gap-3 items-center justify-between"
+          style={{ background: '#fff', border: `1px solid ${TOKENS.slate200}` }}
+        >
+          <div className="flex gap-1 flex-wrap">
+            {filters.map((f) => {
+              const active = dateFilter === f.value;
+              return (
+                <button
+                  key={f.value}
+                  onClick={() => setDateFilter(f.value)}
+                  className="px-3 h-8 rounded text-[12px] font-semibold transition-colors"
+                  style={{
+                    background: active ? TOKENS.charcoal : 'transparent',
+                    color: active ? '#fff' : TOKENS.charcoal,
+                    border: `1px solid ${active ? TOKENS.charcoal : TOKENS.slate200}`,
+                  }}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Tasa Paralelo Actual */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Tasa Paralelo (Hoy)</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  Bs. {formatCurrency(stats.latest.tasaParalelo)}
-                </p>
-                <div className={`flex items-center mt-1 text-sm ${stats.paraleloChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {stats.paraleloChange >= 0 ? <TrendingUp className="h-4 w-4 mr-1" /> : <TrendingDown className="h-4 w-4 mr-1" />}
-                  {stats.paraleloChange >= 0 ? '+' : ''}{stats.paraleloChange.toFixed(2)}%
-                </div>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-full">
-                <TrendingUp className="h-6 w-6 text-blue-600" />
-              </div>
-            </div>
-          </div>
-
-          {/* Brecha Actual */}
-          <div className={`p-6 rounded-lg shadow-md ${stats.latest.brecha > 5 ? 'bg-red-50' : 'bg-yellow-50'}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Brecha Actual</p>
-                <p className={`text-2xl font-bold ${stats.latest.brecha > 5 ? 'text-red-600' : 'text-yellow-600'}`}>
-                  {stats.latest.brecha.toFixed(2)}%
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  Promedio: {stats.avgBrecha.toFixed(2)}%
-                </p>
-              </div>
-              <div className={`p-3 rounded-full ${stats.latest.brecha > 5 ? 'bg-red-100' : 'bg-yellow-100'}`}>
-                <AlertCircle className={`h-6 w-6 ${stats.latest.brecha > 5 ? 'text-red-600' : 'text-yellow-600'}`} />
-              </div>
-            </div>
-          </div>
-
-          {/* Total Registros */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Registros</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {stats.totalRegistros}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  BCV Prom: Bs. {formatCurrency(stats.avgBCV)}
-                </p>
-              </div>
-              <div className="p-3 bg-gray-100 rounded-full">
-                <RefreshCcw className="h-6 w-6 text-gray-600" />
-              </div>
-            </div>
+          <div className="relative w-full md:w-64">
+            <Search
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5"
+              style={{ color: TOKENS.slate400 }}
+            />
+            <input
+              type="text"
+              placeholder="Buscar por fecha o fuente…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pm-input"
+              style={{ paddingLeft: '2.25rem' }}
+            />
           </div>
         </div>
-      )}
 
-      {/* Gráfico de Historial */}
-      {showHistorial && tasas && (
-        <HistorialGrafico tasas={tasas.slice(0, 30).reverse()} />
-      )}
-
-      {/* Filtros */}
-      <div className="bg-white p-4 rounded-lg shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setDateFilter('all')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              dateFilter === 'all' 
-                ? 'bg-blue-100 text-blue-700' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Todas
-          </button>
-          <button
-            onClick={() => setDateFilter('today')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              dateFilter === 'today' 
-                ? 'bg-blue-100 text-blue-700' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Hoy
-          </button>
-          <button
-            onClick={() => setDateFilter('week')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              dateFilter === 'week' 
-                ? 'bg-blue-100 text-blue-700' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Última Semana
-          </button>
-          <button
-            onClick={() => setDateFilter('month')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              dateFilter === 'month' 
-                ? 'bg-blue-100 text-blue-700' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Último Mes
-          </button>
-        </div>
-
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar por fecha o fuente..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-      </div>
-
-      {/* Tabla de Tasas */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fecha y Hora
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tasa BCV
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tasa Paralelo
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Brecha
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fuente
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {!filteredTasas || filteredTasas.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                    <TrendingUp className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p className="text-lg font-medium mb-2">No hay tasas registradas</p>
-                    <p className="text-sm">Comienza agregando tu primera tasa cambiaria</p>
-                  </td>
+        {/* Tabla */}
+        <div className="pm-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-[13px]">
+              <thead className="sticky top-0 z-10">
+                <tr style={{ background: TOKENS.slate100 }}>
+                  <Th>Fecha y hora</Th>
+                  <Th align="right">Tasa BCV</Th>
+                  <Th align="right">Tasa Paralelo</Th>
+                  <Th align="right">Brecha</Th>
+                  <Th>Fuente</Th>
+                  <Th align="right">Acciones</Th>
                 </tr>
-              ) : (
-                filteredTasas.map((tasa) => (
-                  <tr key={tasa.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {formatDate(tasa.fecha)}
-                          </p>
-                          <p className="text-xs text-gray-500 flex items-center">
-                            <Clock className="h-3 w-3 mr-1" />
-                            {tasa.hora}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <p className="text-sm font-medium text-gray-900">
-                        Bs. {formatCurrency(tasa.tasaBCV)}
+              </thead>
+              <tbody>
+                {!filteredTasas || filteredTasas.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-12 text-center"
+                      style={{ color: TOKENS.slate500 }}
+                    >
+                      <TrendingUp
+                        className="h-10 w-10 mx-auto mb-3"
+                        style={{ color: TOKENS.slate300 }}
+                      />
+                      <p className="text-[14px] font-semibold mb-1">
+                        No hay tasas registradas
                       </p>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <p className="text-sm font-medium text-gray-900">
-                        Bs. {formatCurrency(tasa.tasaParalelo)}
+                      <p className="text-[12px]">
+                        Comienza agregando tu primera tasa cambiaria
                       </p>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        tasa.brecha > 5 
-                          ? 'bg-red-100 text-red-800' 
-                          : tasa.brecha > 2 
-                            ? 'bg-yellow-100 text-yellow-800' 
-                            : 'bg-green-100 text-green-800'
-                      }`}>
-                        {tasa.brecha.toFixed(2)}%
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-gray-900">{tasa.fuente || 'Manual'}</p>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <div className="flex items-center justify-center space-x-2">
-                        <button
-                          onClick={() => handleEdit(tasa)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                          title="Editar"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => tasa.id && handleDelete(tasa.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  filteredTasas.map((tasa) => (
+                    <tr
+                      key={tasa.id}
+                      style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+                    >
+                      <Td>
+                        <div className="flex items-center gap-2">
+                          <Calendar
+                            className="h-3.5 w-3.5"
+                            style={{ color: TOKENS.slate400 }}
+                          />
+                          <div>
+                            <div
+                              className="text-[13px] font-semibold pm-tnum"
+                              style={{ color: TOKENS.charcoal }}
+                            >
+                              {formatDate(tasa.fecha)}
+                            </div>
+                            <div
+                              className="text-[11px] flex items-center gap-1 pm-tnum"
+                              style={{ color: TOKENS.slate500 }}
+                            >
+                              <Clock className="h-2.5 w-2.5" />
+                              {tasa.hora}
+                            </div>
+                          </div>
+                        </div>
+                      </Td>
+                      <Td align="right">
+                        <span className="pm-tnum font-semibold" style={{ color: TOKENS.charcoal }}>
+                          Bs. {formatCurrency(tasa.tasaBCV)}
+                        </span>
+                      </Td>
+                      <Td align="right">
+                        <span className="pm-tnum font-semibold" style={{ color: TOKENS.charcoal }}>
+                          Bs. {formatCurrency(tasa.tasaParalelo)}
+                        </span>
+                      </Td>
+                      <Td align="right">
+                        <BrechaBadge brecha={tasa.brecha} />
+                      </Td>
+                      <Td>
+                        <span
+                          className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                          style={{ background: TOKENS.slate100, color: TOKENS.slate500 }}
+                        >
+                          {tasa.fuente || 'Manual'}
+                        </span>
+                      </Td>
+                      <Td align="right">
+                        <div className="flex items-center justify-end gap-1">
+                          <IconBtn onClick={() => handleEdit(tasa)} title="Editar">
+                            <Edit className="h-3.5 w-3.5" />
+                          </IconBtn>
+                          <IconBtn
+                            onClick={() => tasa.id && handleDelete(tasa.id)}
+                            title="Eliminar"
+                            danger
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </IconBtn>
+                        </div>
+                      </Td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
 
-      {/* Modal de Formulario */}
-      {showForm && (
-        <FormularioTasa
-          tasa={editingTasa}
-          onClose={() => {
-            setShowForm(false);
-            setEditingTasa(null);
-          }}
-          onSuccess={handleFormSuccess}
-        />
+        {showForm && (
+          <FormularioTasa
+            tasa={editingTasa}
+            onClose={() => {
+              setShowForm(false);
+              setEditingTasa(null);
+            }}
+            onSuccess={handleFormSuccess}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Th({
+  children,
+  align = 'left',
+}: {
+  children: React.ReactNode;
+  align?: 'left' | 'right';
+}) {
+  return (
+    <th
+      className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.05em] select-none"
+      style={{
+        color: TOKENS.slate700,
+        borderBottom: `1px solid ${TOKENS.slate200}`,
+        textAlign: align,
+      }}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({
+  children,
+  align = 'left',
+}: {
+  children: React.ReactNode;
+  align?: 'left' | 'right';
+}) {
+  return (
+    <td
+      className="px-3 py-2.5 align-middle"
+      style={{ textAlign: align, color: TOKENS.charcoal }}
+    >
+      {children}
+    </td>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  change,
+}: {
+  label: string;
+  value: string;
+  change: number;
+}) {
+  const positive = change >= 0;
+  return (
+    <div className="pm-card px-4 py-3">
+      <div className="pm-eyebrow">{label}</div>
+      <div
+        className="pm-tnum text-[20px] font-bold leading-7 tracking-[-0.01em] mt-1"
+        style={{ color: TOKENS.charcoal }}
+      >
+        {value}
+      </div>
+      <div
+        className="flex items-center gap-1 mt-1 text-[12px] pm-tnum"
+        style={{ color: positive ? TOKENS.green : TOKENS.red }}
+      >
+        {positive ? (
+          <TrendingUp className="h-3 w-3" />
+        ) : (
+          <TrendingDown className="h-3 w-3" />
+        )}
+        {positive ? '+' : ''}
+        {change.toFixed(2)}%
+      </div>
+    </div>
+  );
+}
+
+function BrechaCard({ latest, avg }: { latest: number; avg: number }) {
+  const high = latest > 5;
+  return (
+    <div
+      className="rounded px-4 py-3"
+      style={{
+        background: '#fff',
+        border: `1px solid ${TOKENS.slate200}`,
+        borderLeft: `3px solid ${high ? TOKENS.red : TOKENS.green}`,
+      }}
+    >
+      <div className="pm-eyebrow">Brecha Actual</div>
+      <div
+        className="pm-tnum text-[20px] font-bold leading-7 tracking-[-0.01em] mt-1"
+        style={{ color: high ? TOKENS.red : TOKENS.green }}
+      >
+        {latest.toFixed(2)}%
+      </div>
+      <div
+        className="text-[12px] mt-0.5 pm-tnum"
+        style={{ color: TOKENS.slate500 }}
+      >
+        Promedio: {avg.toFixed(2)}%
+      </div>
+    </div>
+  );
+}
+
+function BrechaBadge({ brecha }: { brecha: number }) {
+  let tone: { bg: string; fg: string } = { bg: TOKENS.greenSoft, fg: TOKENS.green };
+  if (brecha > 5) tone = { bg: TOKENS.redSoft, fg: TOKENS.red };
+  else if (brecha > 2) tone = { bg: TOKENS.amberSoft, fg: TOKENS.amber };
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider pm-tnum"
+      style={{ background: tone.bg, color: tone.fg }}
+    >
+      {brecha.toFixed(2)}%
+    </span>
+  );
+}
+
+function SyncDelta({
+  label,
+  value,
+  change,
+}: {
+  label: string;
+  value: string;
+  change: number;
+}) {
+  const color = change > 0 ? TOKENS.green : change < 0 ? TOKENS.red : TOKENS.slate500;
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="pm-eyebrow">{label}:</span>
+      <span className="pm-tnum font-bold" style={{ color }}>
+        {value}
+      </span>
+      {change !== 0 && (
+        <span className="text-[11px] pm-tnum" style={{ color }}>
+          {change > 0 ? '↑' : '↓'} {Math.abs(change).toFixed(2)}%
+        </span>
       )}
     </div>
+  );
+}
+
+function IconBtn({
+  children,
+  onClick,
+  title,
+  danger,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  title: string;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="inline-flex items-center justify-center h-7 w-7 rounded transition-colors"
+      style={{ color: danger ? TOKENS.red : TOKENS.slate500 }}
+      onMouseEnter={(e) =>
+        ((e.currentTarget as HTMLButtonElement).style.background = danger
+          ? TOKENS.redSoft
+          : TOKENS.slate100)
+      }
+      onMouseLeave={(e) =>
+        ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')
+      }
+    >
+      {children}
+    </button>
   );
 }

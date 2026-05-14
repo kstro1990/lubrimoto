@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from 'react';
-import { X, Plus, Minus, AlertCircle } from 'lucide-react';
+import { X, Plus, Minus, AlertCircle, Package, ArrowRight } from 'lucide-react';
 import { Product, db, recordInventoryMovement, MovementType, SyncStatus } from '@/app/_db/db';
 import { useNotifications } from '@/app/_components/NotificationProvider';
+import { PMScope, TOKENS, PMBtnPrimary, PMBtnSecondary } from '@/app/_components/_pmTheme';
 
 interface StockAdjustmentModalProps {
   isOpen: boolean;
@@ -12,14 +13,16 @@ interface StockAdjustmentModalProps {
   onSuccess?: () => void;
 }
 
-export default function StockAdjustmentModal({ 
-  isOpen, 
-  onClose, 
-  product, 
-  onSuccess 
+type AdjustmentType = 'add' | 'subtract' | 'set';
+
+export default function StockAdjustmentModal({
+  isOpen,
+  onClose,
+  product,
+  onSuccess,
 }: StockAdjustmentModalProps) {
   const { success, error: showError } = useNotifications();
-  const [adjustmentType, setAdjustmentType] = useState<'add' | 'subtract' | 'set'>('add');
+  const [adjustmentType, setAdjustmentType] = useState<AdjustmentType>('add');
   const [quantity, setQuantity] = useState<number>(0);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,19 +31,19 @@ export default function StockAdjustmentModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (quantity <= 0) {
       showError('Error', 'La cantidad debe ser mayor a 0', 3000);
       return;
     }
 
     setIsSubmitting(true);
-    
+
     try {
       let newStock = product.stockQuantity;
       let movementQuantity = quantity;
       let movementType: MovementType;
-      
+
       switch (adjustmentType) {
         case 'add':
           newStock = product.stockQuantity + quantity;
@@ -64,36 +67,36 @@ export default function StockAdjustmentModal({
       }
 
       const now = new Date();
-      
-      // Update product stock
+
       await db.products.update(product.id!, {
         stockQuantity: newStock,
         updatedAt: now,
         syncStatus: SyncStatus.PENDING,
       });
 
-      // Record movement
       const updatedProduct = { ...product, stockQuantity: newStock };
       await recordInventoryMovement(
         updatedProduct,
         movementType,
         movementQuantity,
         undefined,
-        notes || `Ajuste de stock: ${adjustmentType === 'add' ? '+' : adjustmentType === 'subtract' ? '-' : '='} ${quantity}`,
-        'Usuario' // TODO: Get from auth context
+        notes ||
+          `Ajuste de stock: ${
+            adjustmentType === 'add' ? '+' : adjustmentType === 'subtract' ? '-' : '='
+          } ${quantity}`,
+        'Usuario',
       );
 
       success(
         'Stock Actualizado',
         `Stock de "${product.name}" actualizado de ${product.stockQuantity} a ${newStock}`,
-        4000
+        4000,
       );
 
-      // Reset form
       setQuantity(0);
       setNotes('');
       setAdjustmentType('add');
-      
+
       onSuccess?.();
       onClose();
     } catch (err) {
@@ -117,89 +120,154 @@ export default function StockAdjustmentModal({
     }
   };
 
+  const overSubtract =
+    adjustmentType === 'subtract' && quantity > product.stockQuantity;
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <PMScope className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
-        {/* Backdrop */}
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+        <div
+          className="fixed inset-0 transition-opacity"
+          style={{ background: 'rgba(18, 24, 38, 0.55)' }}
           onClick={onClose}
         />
-        
-        {/* Modal */}
-        <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all w-full max-w-md">
+
+        <div
+          className="relative transform overflow-hidden rounded text-left transition-all w-full max-w-md"
+          style={{
+            background: '#fff',
+            border: `1px solid ${TOKENS.slate200}`,
+            boxShadow: '0 20px 40px rgba(18, 24, 38, 0.18)',
+          }}
+        >
           {/* Header */}
-          <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Ajustar Stock
-              </h3>
-              <p className="text-sm text-gray-500">{product.name}</p>
+          <div
+            className="px-5 py-3 flex justify-between items-center"
+            style={{
+              background: TOKENS.slate50,
+              borderBottom: `1px solid ${TOKENS.slate200}`,
+            }}
+          >
+            <div className="flex items-center gap-2.5">
+              <div
+                className="flex items-center justify-center h-8 w-8 rounded"
+                style={{ background: TOKENS.charcoal, color: '#fff' }}
+              >
+                <Package className="h-4 w-4" />
+              </div>
+              <div>
+                <div
+                  className="text-[11px] font-bold uppercase tracking-[0.05em]"
+                  style={{ color: TOKENS.slate500 }}
+                >
+                  Movimiento de stock
+                </div>
+                <h3
+                  className="text-[16px] font-semibold leading-5"
+                  style={{ color: TOKENS.charcoal }}
+                >
+                  Ajustar Stock
+                </h3>
+              </div>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-500"
+              className="inline-flex items-center justify-center h-8 w-8 rounded transition-colors"
+              style={{ color: TOKENS.slate500 }}
+              onMouseEnter={(e) =>
+                ((e.currentTarget as HTMLButtonElement).style.background = TOKENS.slate100)
+              }
+              onMouseLeave={(e) =>
+                ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')
+              }
+              aria-label="Cerrar"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </button>
           </div>
-          
-          {/* Content */}
-          <form onSubmit={handleSubmit} className="p-6">
-            {/* Current Stock */}
-            <div className="mb-6 p-3 bg-blue-50 rounded-lg">
-              <p className="text-sm text-blue-700">
-                Stock Actual: <span className="font-bold text-lg">{product.stockQuantity}</span> unidades
-              </p>
+
+          <form
+            onSubmit={handleSubmit}
+            className="p-5"
+            style={{ background: TOKENS.bg }}
+          >
+            {/* Product summary */}
+            <div
+              className="mb-5 px-4 py-3 rounded flex items-center justify-between"
+              style={{
+                background: '#fff',
+                border: `1px solid ${TOKENS.slate200}`,
+              }}
+            >
+              <div className="min-w-0">
+                <div
+                  className="text-[11px] font-bold uppercase tracking-[0.05em]"
+                  style={{ color: TOKENS.slate500 }}
+                >
+                  Producto
+                </div>
+                <div
+                  className="font-semibold text-[14px] truncate"
+                  style={{ color: TOKENS.charcoal }}
+                >
+                  {product.name}
+                </div>
+                <div
+                  className="font-mono text-[12px] mt-0.5"
+                  style={{ color: TOKENS.slate500 }}
+                >
+                  {product.sku}
+                </div>
+              </div>
+              <div className="text-right pl-4">
+                <div
+                  className="text-[11px] font-bold uppercase tracking-[0.05em]"
+                  style={{ color: TOKENS.slate500 }}
+                >
+                  Stock actual
+                </div>
+                <div
+                  className="pm-tnum font-bold text-[24px] leading-7"
+                  style={{ color: TOKENS.charcoal }}
+                >
+                  {product.stockQuantity}
+                </div>
+              </div>
             </div>
 
             {/* Adjustment Type */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de Ajuste
-              </label>
+              <label className="pm-label">Tipo de Ajuste</label>
               <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
+                <AdjustmentButton
+                  active={adjustmentType === 'add'}
                   onClick={() => setAdjustmentType('add')}
-                  className={`flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    adjustmentType === 'add'
-                      ? 'bg-green-100 text-green-700 border-2 border-green-500'
-                      : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
-                  }`}
+                  tone="add"
                 >
-                  <Plus className="h-4 w-4 mr-1" />
+                  <Plus className="h-3.5 w-3.5" />
                   Agregar
-                </button>
-                <button
-                  type="button"
+                </AdjustmentButton>
+                <AdjustmentButton
+                  active={adjustmentType === 'subtract'}
                   onClick={() => setAdjustmentType('subtract')}
-                  className={`flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    adjustmentType === 'subtract'
-                      ? 'bg-red-100 text-red-700 border-2 border-red-500'
-                      : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
-                  }`}
+                  tone="subtract"
                 >
-                  <Minus className="h-4 w-4 mr-1" />
+                  <Minus className="h-3.5 w-3.5" />
                   Restar
-                </button>
-                <button
-                  type="button"
+                </AdjustmentButton>
+                <AdjustmentButton
+                  active={adjustmentType === 'set'}
                   onClick={() => setAdjustmentType('set')}
-                  className={`flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    adjustmentType === 'set'
-                      ? 'bg-blue-100 text-blue-700 border-2 border-blue-500'
-                      : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
-                  }`}
+                  tone="set"
                 >
                   Establecer
-                </button>
+                </AdjustmentButton>
               </div>
             </div>
 
             {/* Quantity */}
             <div className="mb-4">
-              <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="quantity" className="pm-label">
                 Cantidad
               </label>
               <input
@@ -209,7 +277,7 @@ export default function StockAdjustmentModal({
                 step="1"
                 value={quantity || ''}
                 onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="pm-input pm-tnum"
                 placeholder="0"
                 required
               />
@@ -217,22 +285,47 @@ export default function StockAdjustmentModal({
 
             {/* Preview */}
             {quantity > 0 && (
-              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">
-                  Nuevo stock será: <span className="font-bold text-lg">{getNewStockDisplay()}</span>
-                </p>
-                {adjustmentType === 'subtract' && quantity > product.stockQuantity && (
-                  <p className="text-sm text-red-600 mt-1 flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-1" />
-                    No puedes restar más del stock disponible
-                  </p>
+              <div
+                className="mb-4 px-4 py-3 rounded flex items-center gap-3"
+                style={{
+                  background: '#fff',
+                  border: `1px solid ${TOKENS.slate200}`,
+                }}
+              >
+                <div className="flex-1">
+                  <div
+                    className="text-[11px] font-bold uppercase tracking-[0.05em]"
+                    style={{ color: TOKENS.slate500 }}
+                  >
+                    Nuevo stock
+                  </div>
+                  <div
+                    className="pm-tnum font-bold text-[20px] leading-7"
+                    style={{ color: overSubtract ? TOKENS.red : TOKENS.charcoal }}
+                  >
+                    <span style={{ color: TOKENS.slate400 }}>{product.stockQuantity}</span>
+                    <ArrowRight
+                      className="inline h-4 w-4 mx-2"
+                      style={{ color: TOKENS.slate400 }}
+                    />
+                    {getNewStockDisplay()}
+                  </div>
+                </div>
+                {overSubtract && (
+                  <div
+                    className="flex items-center gap-1 text-[12px]"
+                    style={{ color: TOKENS.red }}
+                  >
+                    <AlertCircle className="h-4 w-4" />
+                    Excede el stock disponible
+                  </div>
                 )}
               </div>
             )}
 
             {/* Notes */}
-            <div className="mb-6">
-              <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
+            <div className="mb-5">
+              <label htmlFor="notes" className="pm-label">
                 Notas (opcional)
               </label>
               <textarea
@@ -240,31 +333,64 @@ export default function StockAdjustmentModal({
                 rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="Motivo del ajuste..."
+                className="pm-input"
+                placeholder="Motivo del ajuste…"
               />
             </div>
 
             {/* Actions */}
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-              >
+            <div
+              className="flex justify-end gap-2 pt-3"
+              style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+            >
+              <PMBtnSecondary type="button" onClick={onClose}>
                 Cancelar
-              </button>
-              <button
+              </PMBtnSecondary>
+              <PMBtnPrimary
                 type="submit"
-                disabled={isSubmitting || quantity <= 0 || (adjustmentType === 'subtract' && quantity > product.stockQuantity)}
-                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isSubmitting || quantity <= 0 || overSubtract}
               >
-                {isSubmitting ? 'Actualizando...' : 'Aplicar Ajuste'}
-              </button>
+                {isSubmitting ? 'Actualizando…' : 'Aplicar Ajuste'}
+              </PMBtnPrimary>
             </div>
           </form>
         </div>
       </div>
-    </div>
+    </PMScope>
+  );
+}
+
+function AdjustmentButton({
+  active,
+  onClick,
+  tone,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  tone: 'add' | 'subtract' | 'set';
+  children: React.ReactNode;
+}) {
+  const activeColor =
+    tone === 'add' ? TOKENS.green : tone === 'subtract' ? TOKENS.red : TOKENS.orange;
+  const activeBg =
+    tone === 'add'
+      ? TOKENS.greenSoft
+      : tone === 'subtract'
+      ? TOKENS.redSoft
+      : TOKENS.orangeSoft;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center justify-center gap-1.5 px-2 h-9 text-[13px] font-semibold rounded transition-colors"
+      style={{
+        background: active ? activeBg : '#fff',
+        color: active ? activeColor : TOKENS.charcoal,
+        border: `1px solid ${active ? activeColor : TOKENS.slate300}`,
+      }}
+    >
+      {children}
+    </button>
   );
 }

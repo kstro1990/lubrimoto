@@ -11,6 +11,7 @@ import {
   Target,
   BarChart3,
 } from 'lucide-react';
+import { TOKENS } from './_pmTheme';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', icon: Home },
@@ -28,26 +29,49 @@ export default function BottomNavBar() {
   return (
     <nav
       aria-label="Navegación principal"
-      className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg"
+      className="fixed bottom-0 left-0 right-0 z-40"
+      style={{
+        background: '#fff',
+        borderTop: `1px solid ${TOKENS.slate200}`,
+        boxShadow: '0 -2px 8px rgba(18, 24, 38, 0.04)',
+      }}
     >
       <ul className="flex items-stretch justify-around h-16 max-w-screen-xl mx-auto">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          // Home matches exact only; modules match their prefix so nested
-          // routes (e.g. /ventas/nueva) keep the parent active.
           const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
           return (
-            <li key={href} className="flex-1">
+            <li key={href} className="flex-1 relative">
               <Link
                 href={href}
                 aria-current={isActive ? 'page' : undefined}
-                className={`flex flex-col items-center justify-center h-full px-1 transition-colors ${
-                  isActive
-                    ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800'
-                }`}
+                className="flex flex-col items-center justify-center h-full px-1 transition-colors"
+                style={{
+                  color: isActive ? TOKENS.charcoal : TOKENS.slate500,
+                  background: isActive ? TOKENS.slate50 : 'transparent',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive)
+                    (e.currentTarget as HTMLAnchorElement).style.background = TOKENS.slate50;
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive)
+                    (e.currentTarget as HTMLAnchorElement).style.background = 'transparent';
+                }}
               >
+                {isActive && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-10 rounded-b"
+                    style={{ background: TOKENS.orange }}
+                  />
+                )}
                 <Icon className="w-5 h-5" aria-hidden="true" />
-                <span className="text-[10px] mt-0.5 font-medium leading-tight">{label}</span>
+                <span
+                  className="text-[10px] mt-0.5 font-bold tracking-wider uppercase leading-tight"
+                  style={{ letterSpacing: '0.04em' }}
+                >
+                  {label}
+                </span>
               </Link>
             </li>
           );

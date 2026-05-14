@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, Save, TrendingUp, AlertCircle } from 'lucide-react';
 import { db, HistorialTasa } from '@/app/_db/db';
 import { useNotifications } from '@/app/_components/NotificationProvider';
+import { PMScope, TOKENS, PMBtnPrimary, PMBtnSecondary } from '@/app/_components/_pmTheme';
 
 interface FormularioTasaProps {
   tasa?: HistorialTasa | null;
@@ -15,16 +16,19 @@ export default function FormularioTasa({ tasa, onClose, onSuccess }: FormularioT
   const { success, error: showError } = useNotifications();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  
+
   const [formData, setFormData] = useState({
-    tasaBCV: tasa?.tasaBCV || 36.50,
-    tasaParalelo: tasa?.tasaParalelo || 38.20,
+    tasaBCV: tasa?.tasaBCV || 36.5,
+    tasaParalelo: tasa?.tasaParalelo || 38.2,
     fuente: tasa?.fuente || 'Manual',
-    fecha: tasa ? new Date(tasa.fecha).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-    hora: tasa?.hora || new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }),
+    fecha: tasa
+      ? new Date(tasa.fecha).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0],
+    hora:
+      tasa?.hora ||
+      new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }),
   });
 
-  // Calcular brecha en tiempo real
   const brecha = React.useMemo(() => {
     if (formData.tasaBCV === 0) return 0;
     return ((formData.tasaParalelo - formData.tasaBCV) / formData.tasaBCV) * 100;
@@ -32,38 +36,23 @@ export default function FormularioTasa({ tasa, onClose, onSuccess }: FormularioT
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    
-    if (formData.tasaBCV <= 0) {
-      newErrors.tasaBCV = 'La tasa BCV debe ser mayor a 0';
-    }
-    
-    if (formData.tasaParalelo <= 0) {
+    if (formData.tasaBCV <= 0) newErrors.tasaBCV = 'La tasa BCV debe ser mayor a 0';
+    if (formData.tasaParalelo <= 0)
       newErrors.tasaParalelo = 'La tasa paralelo debe ser mayor a 0';
-    }
-    
-    if (formData.tasaParalelo < formData.tasaBCV) {
+    if (formData.tasaParalelo < formData.tasaBCV)
       newErrors.tasaParalelo = 'La tasa paralelo no puede ser menor que la tasa BCV';
-    }
-    
-    if (!formData.fecha) {
-      newErrors.fecha = 'La fecha es requerida';
-    }
-    
-    if (!formData.hora) {
-      newErrors.hora = 'La hora es requerida';
-    }
-    
+    if (!formData.fecha) newErrors.fecha = 'La fecha es requerida';
+    if (!formData.hora) newErrors.hora = 'La hora es requerida';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
-    
+
     setLoading(true);
-    
+
     try {
       const tasaData = {
         tasaBCV: formData.tasaBCV,
@@ -74,19 +63,17 @@ export default function FormularioTasa({ tasa, onClose, onSuccess }: FormularioT
         fuente: formData.fuente || 'Manual',
         createdAt: new Date(),
       };
-      
+
       if (tasa?.id) {
-        // Actualizar existente
         await db.historialTasas.update(tasa.id, tasaData);
         success('Tasa actualizada', 'El registro ha sido actualizado exitosamente');
       } else {
-        // Crear nuevo
         await db.historialTasas.add(tasaData);
         success('Tasa registrada', 'La nueva tasa ha sido guardada exitosamente');
       }
-      
+
       onSuccess();
-    } catch (err) {
+    } catch {
       showError('Error', 'No se pudo guardar la tasa');
     } finally {
       setLoading(false);
@@ -95,54 +82,86 @@ export default function FormularioTasa({ tasa, onClose, onSuccess }: FormularioT
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: name === 'tasaBCV' || name === 'tasaParalelo' 
-        ? parseFloat(value) || 0 
-        : value,
+      [name]:
+        name === 'tasaBCV' || name === 'tasaParalelo' ? parseFloat(value) || 0 : value,
     }));
-    
-    // Clear error when user types
     if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
+      setErrors((prev) => ({ ...prev, [name]: '' }));
     }
   };
 
+  const fieldErr = (n: string) => (errors[n] ? 'pm-input pm-input-error' : 'pm-input');
+
+  const high = brecha > 5;
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <PMScope className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
-        {/* Backdrop */}
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+        <div
+          className="fixed inset-0"
+          style={{ background: 'rgba(18, 24, 38, 0.55)' }}
           onClick={onClose}
         />
-        
-        {/* Modal */}
-        <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all w-full max-w-lg">
+
+        <div
+          className="relative overflow-hidden rounded w-full max-w-lg pm-elevated"
+          style={{ background: '#fff', border: `1px solid ${TOKENS.slate200}` }}
+        >
           {/* Header */}
-          <div className="bg-blue-600 px-4 py-3 flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-white flex items-center">
-              <TrendingUp className="h-5 w-5 mr-2" />
-              {tasa ? 'Editar Tasa' : 'Nueva Tasa Cambiaria'}
-            </h3>
+          <div
+            className="px-5 py-3 flex justify-between items-center"
+            style={{
+              background: TOKENS.slate50,
+              borderBottom: `1px solid ${TOKENS.slate200}`,
+            }}
+          >
+            <div className="flex items-center gap-2.5">
+              <div
+                className="flex items-center justify-center h-8 w-8 rounded"
+                style={{ background: TOKENS.charcoal, color: '#fff' }}
+              >
+                <TrendingUp className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="pm-eyebrow">
+                  {tasa ? 'Editar registro' : 'Nuevo registro'}
+                </div>
+                <h3
+                  className="text-[16px] font-semibold leading-5"
+                  style={{ color: TOKENS.charcoal }}
+                >
+                  {tasa ? 'Editar Tasa' : 'Nueva Tasa Cambiaria'}
+                </h3>
+              </div>
+            </div>
             <button
               onClick={onClose}
-              className="text-white hover:text-gray-200 transition-colors"
+              className="inline-flex items-center justify-center h-8 w-8 rounded transition-colors"
+              style={{ color: TOKENS.slate500 }}
+              onMouseEnter={(e) =>
+                ((e.currentTarget as HTMLButtonElement).style.background = TOKENS.slate100)
+              }
+              onMouseLeave={(e) =>
+                ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')
+              }
             >
-              <X className="h-6 w-6" />
+              <X className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            {/* Tasas */}
+          <form onSubmit={handleSubmit} className="p-5 space-y-4" style={{ background: TOKENS.bg }}>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tasa BCV <span className="text-red-500">*</span>
+                <label className="pm-label">
+                  Tasa BCV <span style={{ color: TOKENS.red }}>*</span>
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                  <span
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] font-bold pointer-events-none"
+                    style={{ color: TOKENS.slate500 }}
+                  >
                     Bs.
                   </span>
                   <input
@@ -152,23 +171,23 @@ export default function FormularioTasa({ tasa, onClose, onSuccess }: FormularioT
                     onChange={handleChange}
                     step="0.01"
                     min="0.01"
-                    className={`w-full pl-10 pr-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.tasaBCV ? 'border-red-500' : 'border-gray-300'
-                    }`}
+                    className={`${fieldErr('tasaBCV')} pm-tnum`}
+                    style={{ paddingLeft: '2.5rem' }}
                     placeholder="36.50"
                   />
                 </div>
-                {errors.tasaBCV && (
-                  <p className="mt-1 text-sm text-red-600">{errors.tasaBCV}</p>
-                )}
+                {errors.tasaBCV && <p className="pm-error">{errors.tasaBCV}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tasa Paralelo <span className="text-red-500">*</span>
+                <label className="pm-label">
+                  Tasa Paralelo <span style={{ color: TOKENS.red }}>*</span>
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                  <span
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] font-bold pointer-events-none"
+                    style={{ color: TOKENS.slate500 }}
+                  >
                     Bs.
                   </span>
                   <input
@@ -178,83 +197,81 @@ export default function FormularioTasa({ tasa, onClose, onSuccess }: FormularioT
                     onChange={handleChange}
                     step="0.01"
                     min="0.01"
-                    className={`w-full pl-10 pr-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.tasaParalelo ? 'border-red-500' : 'border-gray-300'
-                    }`}
+                    className={`${fieldErr('tasaParalelo')} pm-tnum`}
+                    style={{ paddingLeft: '2.5rem' }}
                     placeholder="38.20"
                   />
                 </div>
-                {errors.tasaParalelo && (
-                  <p className="mt-1 text-sm text-red-600">{errors.tasaParalelo}</p>
-                )}
+                {errors.tasaParalelo && <p className="pm-error">{errors.tasaParalelo}</p>}
               </div>
             </div>
 
-            {/* Brecha Calculada */}
-            <div className={`p-3 rounded-md ${brecha > 5 ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">Brecha Calculada:</span>
-                <span className={`text-lg font-bold ${brecha > 5 ? 'text-red-600' : 'text-green-600'}`}>
+            {/* Brecha calculada */}
+            <div
+              className="rounded px-3 py-2.5 flex items-center justify-between"
+              style={{
+                background: '#fff',
+                border: `1px solid ${TOKENS.slate200}`,
+                borderLeft: `3px solid ${high ? TOKENS.red : TOKENS.green}`,
+              }}
+            >
+              <div>
+                <div className="pm-eyebrow">Brecha calculada</div>
+                <div
+                  className="pm-tnum font-bold text-[18px]"
+                  style={{ color: high ? TOKENS.red : TOKENS.green }}
+                >
                   {brecha.toFixed(2)}%
-                </span>
+                </div>
               </div>
-              {brecha > 5 && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <AlertCircle className="h-4 w-4 mr-1" />
-                  Brecha alta - revisar tasas
-                </p>
+              {high && (
+                <div
+                  className="text-[12px] flex items-center gap-1"
+                  style={{ color: TOKENS.red }}
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  Brecha alta · revisar tasas
+                </div>
               )}
             </div>
 
-            {/* Fecha y Hora */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Fecha <span className="text-red-500">*</span>
+                <label className="pm-label">
+                  Fecha <span style={{ color: TOKENS.red }}>*</span>
                 </label>
                 <input
                   type="date"
                   name="fecha"
                   value={formData.fecha}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.fecha ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={fieldErr('fecha')}
                 />
-                {errors.fecha && (
-                  <p className="mt-1 text-sm text-red-600">{errors.fecha}</p>
-                )}
+                {errors.fecha && <p className="pm-error">{errors.fecha}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Hora <span className="text-red-500">*</span>
+                <label className="pm-label">
+                  Hora <span style={{ color: TOKENS.red }}>*</span>
                 </label>
                 <input
                   type="time"
                   name="hora"
                   value={formData.hora}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.hora ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={fieldErr('hora')}
                 />
-                {errors.hora && (
-                  <p className="mt-1 text-sm text-red-600">{errors.hora}</p>
-                )}
+                {errors.hora && <p className="pm-error">{errors.hora}</p>}
               </div>
             </div>
 
-            {/* Fuente */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fuente
-              </label>
+              <label className="pm-label">Fuente</label>
               <select
                 name="fuente"
                 value={formData.fuente}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="pm-input"
               >
                 <option value="Manual">Manual</option>
                 <option value="BCV">BCV Oficial</option>
@@ -265,36 +282,36 @@ export default function FormularioTasa({ tasa, onClose, onSuccess }: FormularioT
               </select>
             </div>
 
-            {/* Actions */}
-            <div className="flex justify-end space-x-3 pt-4 border-t">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-              >
+            <div
+              className="flex justify-end gap-2 pt-3"
+              style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+            >
+              <PMBtnSecondary type="button" onClick={onClose}>
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+              </PMBtnSecondary>
+              <PMBtnPrimary type="submit" disabled={loading}>
                 {loading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                    Guardando...
+                    <span
+                      className="inline-block w-3.5 h-3.5 rounded-full animate-spin"
+                      style={{
+                        border: '2px solid rgba(255,255,255,0.4)',
+                        borderTopColor: '#fff',
+                      }}
+                    />
+                    Guardando…
                   </>
                 ) : (
                   <>
-                    <Save className="h-4 w-4 mr-2" />
+                    <Save className="h-4 w-4" />
                     {tasa ? 'Actualizar' : 'Guardar'}
                   </>
                 )}
-              </button>
+              </PMBtnPrimary>
             </div>
           </form>
         </div>
       </div>
-    </div>
+    </PMScope>
   );
 }

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, X, Package } from 'lucide-react';
 import { db, Product } from '@/app/_db/db';
+import { TOKENS } from '@/app/_components/_pmTheme';
 
 interface ProductSearchProps {
   onSelect?: (product: Product) => void;
@@ -17,20 +18,19 @@ interface ProductSearchProps {
 export default function ProductSearch({
   onSelect,
   onFilter,
-  placeholder = "Buscar por nombre, SKU o descripción...",
+  placeholder = 'Buscar por nombre, SKU o descripción…',
   showResults = true,
   autoFocus = false,
-  className = "",
+  className = '',
   filterInStock = false,
 }: ProductSearchProps) {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState<Product[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Debounce search
   const debouncedSearch = useCallback(
     debounce(async (term: string) => {
       if (!term.trim()) {
@@ -38,7 +38,7 @@ export default function ProductSearch({
         setIsSearching(false);
         if (onFilter) {
           const allProducts = await db.products.toArray();
-          onFilter(filterInStock ? allProducts.filter(p => p.stockQuantity > 0) : allProducts);
+          onFilter(filterInStock ? allProducts.filter((p) => p.stockQuantity > 0) : allProducts);
         }
         return;
       }
@@ -46,39 +46,32 @@ export default function ProductSearch({
       setIsSearching(true);
       try {
         const lowerTerm = term.toLowerCase();
-        
-        // Search by name, SKU, or description
         const allProducts = await db.products.toArray();
-        const filtered = allProducts.filter(product => {
-          const matchesSearch = 
+        const filtered = allProducts.filter((product) => {
+          const matchesSearch =
             product.name.toLowerCase().includes(lowerTerm) ||
             product.sku.toLowerCase().includes(lowerTerm) ||
             (product.description && product.description.toLowerCase().includes(lowerTerm));
-          
-          if (filterInStock) {
-            return matchesSearch && product.stockQuantity > 0;
-          }
+
+          if (filterInStock) return matchesSearch && product.stockQuantity > 0;
           return matchesSearch;
         });
 
         setResults(filtered);
-        if (onFilter) {
-          onFilter(filtered);
-        }
+        if (onFilter) onFilter(filtered);
       } catch (error) {
         console.error('Error searching products:', error);
       } finally {
         setIsSearching(false);
       }
     }, 300),
-    [onFilter, filterInStock]
+    [onFilter, filterInStock],
   );
 
   useEffect(() => {
     debouncedSearch(searchTerm);
   }, [searchTerm, debouncedSearch]);
 
-  // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -90,12 +83,10 @@ export default function ProductSearch({
         setShowDropdown(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Keyboard shortcut: Ctrl/Cmd + K to focus
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -103,7 +94,6 @@ export default function ProductSearch({
         inputRef.current?.focus();
       }
     };
-
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
@@ -111,34 +101,32 @@ export default function ProductSearch({
   const handleSelect = (product: Product) => {
     if (onSelect) {
       onSelect(product);
-      setSearchTerm("");
+      setSearchTerm('');
       setResults([]);
       setShowDropdown(false);
     }
   };
 
   const clearSearch = () => {
-    setSearchTerm("");
+    setSearchTerm('');
     setResults([]);
     inputRef.current?.focus();
     if (onFilter) {
-      db.products.toArray().then(products => {
-        onFilter(filterInStock ? products.filter(p => p.stockQuantity > 0) : products);
+      db.products.toArray().then((products) => {
+        onFilter(filterInStock ? products.filter((p) => p.stockQuantity > 0) : products);
       });
     }
   };
 
   const handleInputFocus = () => {
-    if (showResults && searchTerm.trim()) {
-      setShowDropdown(true);
-    }
+    if (showResults && searchTerm.trim()) setShowDropdown(true);
   };
 
   return (
     <div className={`relative ${className}`}>
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-gray-400" />
+          <Search className="h-4 w-4" style={{ color: TOKENS.slate400 }} />
         </div>
         <input
           ref={inputRef}
@@ -151,72 +139,125 @@ export default function ProductSearch({
           onFocus={handleInputFocus}
           placeholder={placeholder}
           autoFocus={autoFocus}
-          className="block w-full pl-10 pr-20 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+          className="pm-input"
+          style={{ paddingLeft: '2.25rem', paddingRight: '5rem', height: '40px' }}
         />
-        <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+        <div className="absolute inset-y-0 right-0 flex items-center pr-2 gap-1">
           {searchTerm && (
             <button
               onClick={clearSearch}
-              className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors mr-1"
+              className="p-1 rounded transition-colors"
+              style={{ color: TOKENS.slate400 }}
+              onMouseEnter={(e) =>
+                ((e.currentTarget as HTMLButtonElement).style.background = TOKENS.slate100)
+              }
+              onMouseLeave={(e) =>
+                ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')
+              }
               title="Limpiar búsqueda"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           )}
-          <kbd className="hidden sm:inline-flex items-center px-2 py-0.5 border border-gray-200 rounded text-xs font-sans font-medium text-gray-400 bg-gray-50">
-            Ctrl+K
+          <kbd
+            className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider"
+            style={{
+              background: TOKENS.slate100,
+              border: `1px solid ${TOKENS.slate200}`,
+              color: TOKENS.slate500,
+            }}
+          >
+            ⌘K
           </kbd>
         </div>
       </div>
 
-      {/* Dropdown Results */}
       {showResults && showDropdown && (searchTerm.trim() || results.length > 0) && (
         <div
           ref={dropdownRef}
-          className="absolute z-50 mt-1 w-full bg-white shadow-lg rounded-lg border border-gray-200 max-h-80 overflow-y-auto"
+          className="absolute z-50 mt-1 w-full max-h-80 overflow-y-auto rounded pm-elevated"
+          style={{ background: '#fff', border: `1px solid ${TOKENS.slate200}` }}
         >
           {isSearching ? (
-            <div className="p-4 text-center text-gray-500">
-              <div className="animate-spin inline-block w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full mr-2" />
-              Buscando...
+            <div
+              className="p-4 text-center text-[13px] flex items-center justify-center gap-2"
+              style={{ color: TOKENS.slate500 }}
+            >
+              <span
+                className="inline-block w-3.5 h-3.5 rounded-full animate-spin"
+                style={{
+                  border: `2px solid ${TOKENS.slate200}`,
+                  borderTopColor: TOKENS.orange,
+                }}
+              />
+              Buscando…
             </div>
           ) : results.length === 0 ? (
-            <div className="p-4 text-center text-gray-500">
-              <Package className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-              <p>No se encontraron productos</p>
-              <p className="text-sm text-gray-400 mt-1">
+            <div className="p-6 text-center" style={{ color: TOKENS.slate500 }}>
+              <Package
+                className="h-8 w-8 mx-auto mb-2"
+                style={{ color: TOKENS.slate300 }}
+              />
+              <p className="text-[13px] font-semibold">No se encontraron productos</p>
+              <p className="text-[11px] mt-1" style={{ color: TOKENS.slate400 }}>
                 Intenta con otro término de búsqueda
               </p>
             </div>
           ) : (
-            <ul className="py-1">
+            <ul>
               {results.map((product) => (
                 <li
                   key={product.id || product.sku}
                   onClick={() => handleSelect(product)}
-                  className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors ${
-                    product.stockQuantity <= 0 ? 'opacity-60' : ''
-                  }`}
+                  className="px-4 py-2.5 cursor-pointer transition-colors"
+                  style={{
+                    borderBottom: `1px solid ${TOKENS.slate100}`,
+                    opacity: product.stockQuantity <= 0 ? 0.6 : 1,
+                  }}
+                  onMouseEnter={(e) =>
+                    ((e.currentTarget as HTMLLIElement).style.background = TOKENS.slate50)
+                  }
+                  onMouseLeave={(e) =>
+                    ((e.currentTarget as HTMLLIElement).style.background = 'transparent')
+                  }
                 >
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-start gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
+                      <p
+                        className="text-[13px] font-semibold truncate"
+                        style={{ color: TOKENS.charcoal }}
+                      >
                         {product.name}
                       </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        SKU: <span className="font-mono">{product.sku}</span>
+                      <p
+                        className="text-[11px] mt-0.5"
+                        style={{ color: TOKENS.slate500 }}
+                      >
+                        <span
+                          className="font-mono px-1 py-0.5 rounded"
+                          style={{ background: TOKENS.slate100 }}
+                        >
+                          {product.sku}
+                        </span>
                         {product.description && (
-                          <span className="ml-2 text-gray-400">{product.description}</span>
+                          <span className="ml-2">{product.description}</span>
                         )}
                       </p>
                     </div>
-                    <div className="ml-4 text-right flex-shrink-0">
-                      <p className="text-sm font-semibold text-gray-900">
+                    <div className="text-right shrink-0">
+                      <p
+                        className="text-[13px] font-bold pm-tnum"
+                        style={{ color: TOKENS.charcoal }}
+                      >
                         ${product.priceUsd.toFixed(2)}
                       </p>
-                      <p className={`text-xs mt-0.5 ${
-                        product.stockQuantity <= 5 ? 'text-red-600 font-medium' : 'text-gray-500'
-                      }`}>
+                      <p
+                        className="text-[11px] pm-tnum mt-0.5"
+                        style={{
+                          color: product.stockQuantity <= 5 ? TOKENS.red : TOKENS.slate500,
+                          fontWeight: product.stockQuantity <= 5 ? 700 : 400,
+                        }}
+                      >
                         Stock: {product.stockQuantity}
                       </p>
                     </div>
@@ -228,9 +269,8 @@ export default function ProductSearch({
         </div>
       )}
 
-      {/* Results Count (when used for filtering) */}
       {!showResults && results.length > 0 && (
-        <div className="mt-2 text-sm text-gray-500">
+        <div className="mt-2 text-[12px]" style={{ color: TOKENS.slate500 }}>
           {results.length} {results.length === 1 ? 'producto encontrado' : 'productos encontrados'}
         </div>
       )}
@@ -238,10 +278,9 @@ export default function ProductSearch({
   );
 }
 
-// Debounce utility function
 function debounce<T extends (...args: any[]) => any>(
   func: T,
-  wait: number
+  wait: number,
 ): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout;
   return (...args: Parameters<T>) => {
@@ -250,7 +289,6 @@ function debounce<T extends (...args: any[]) => any>(
   };
 }
 
-// Hook for product search
 export function useProductSearch() {
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -260,15 +298,15 @@ export function useProductSearch() {
       setSearchResults([]);
       return [];
     }
-
     setIsSearching(true);
     try {
       const lowerTerm = term.toLowerCase();
       const allProducts = await db.products.toArray();
-      const filtered = allProducts.filter(product =>
-        product.name.toLowerCase().includes(lowerTerm) ||
-        product.sku.toLowerCase().includes(lowerTerm) ||
-        (product.description && product.description.toLowerCase().includes(lowerTerm))
+      const filtered = allProducts.filter(
+        (product) =>
+          product.name.toLowerCase().includes(lowerTerm) ||
+          product.sku.toLowerCase().includes(lowerTerm) ||
+          (product.description && product.description.toLowerCase().includes(lowerTerm)),
       );
       setSearchResults(filtered);
       return filtered;

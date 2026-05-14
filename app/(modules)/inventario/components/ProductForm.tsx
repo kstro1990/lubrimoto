@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Product, db, generateSKU, SyncStatus, recordInventoryMovement, MovementType } from '@/app/_db/db';
+import { Product, db, generateSKU, SyncStatus } from '@/app/_db/db';
 import { Package, DollarSign, Box, AlertCircle, Building2, Tag, MapPin, Barcode } from 'lucide-react';
+import { TOKENS, PMBtnPrimary, PMBtnSecondary } from '@/app/_components/_pmTheme';
 
 interface ProductFormProps {
   product: Product | null | undefined;
@@ -24,7 +25,7 @@ const CATEGORIES = [
   'Líquidos',
   'Repuestos',
   'Herramientas',
-  'Otro'
+  'Otro',
 ];
 
 export default function ProductForm({ product, onSubmit, onCancel, mode }: ProductFormProps) {
@@ -41,7 +42,7 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
     barcode: '',
     location: '',
   });
-  
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isGeneratingSKU, setIsGeneratingSKU] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -62,7 +63,6 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
         location: product.location || '',
       });
     } else if (mode === 'create') {
-      // Auto-generate SKU for new products
       generateNewSKU();
     }
   }, [product, mode]);
@@ -71,14 +71,13 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
     setIsGeneratingSKU(true);
     try {
       const newSKU = await generateSKU();
-      setFormData(prev => ({ ...prev, sku: newSKU }));
-      // Clear any previous SKU error since we generated a new valid one
-      setErrors(prev => ({ ...prev, sku: '' }));
+      setFormData((prev) => ({ ...prev, sku: newSKU }));
+      setErrors((prev) => ({ ...prev, sku: '' }));
     } catch (error) {
       console.error('Error generating SKU:', error);
-      setErrors(prev => ({ 
-        ...prev, 
-        sku: 'Error al generar SKU. Por favor inténtalo de nuevo o ingresa uno manualmente.' 
+      setErrors((prev) => ({
+        ...prev,
+        sku: 'Error al generar SKU. Por favor inténtalo de nuevo o ingresa uno manualmente.',
       }));
     } finally {
       setIsGeneratingSKU(false);
@@ -88,44 +87,25 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
   const validateField = (name: string, value: any): string => {
     switch (name) {
       case 'name':
-        if (!value || value.trim().length < 2) {
-          return 'El nombre debe tener al menos 2 caracteres';
-        }
-        if (value.trim().length > 100) {
-          return 'El nombre no puede exceder 100 caracteres';
-        }
+        if (!value || value.trim().length < 2) return 'El nombre debe tener al menos 2 caracteres';
+        if (value.trim().length > 100) return 'El nombre no puede exceder 100 caracteres';
         return '';
-      
       case 'sku':
-        if (!value || value.trim().length < 3) {
-          return 'El SKU debe tener al menos 3 caracteres';
-        }
+        if (!value || value.trim().length < 3) return 'El SKU debe tener al menos 3 caracteres';
         return '';
-      
       case 'priceUsd':
-        if (!value || value <= 0) {
-          return 'El precio debe ser mayor a 0';
-        }
+        if (!value || value <= 0) return 'El precio debe ser mayor a 0';
         return '';
-      
       case 'costUsd':
-        if (value !== undefined && value !== null && value < 0) {
-          return 'El costo no puede ser negativo';
-        }
+        if (value !== undefined && value !== null && value < 0) return 'El costo no puede ser negativo';
         return '';
-      
       case 'stockQuantity':
-        if (value === undefined || value === null || value < 0) {
-          return 'El stock no puede ser negativo';
-        }
+        if (value === undefined || value === null || value < 0) return 'El stock no puede ser negativo';
         return '';
-      
       case 'minStockAlert':
-        if (value !== undefined && value !== null && value < 0) {
+        if (value !== undefined && value !== null && value < 0)
           return 'La alerta de stock mínimo no puede ser negativa';
-        }
         return '';
-      
       default:
         return '';
     }
@@ -133,23 +113,18 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
 
   const validateForm = async (): Promise<boolean> => {
     const newErrors: Record<string, string> = {};
-    
     const fieldsToValidate = ['name', 'sku', 'priceUsd', 'stockQuantity'];
-    
-    fieldsToValidate.forEach(field => {
+
+    fieldsToValidate.forEach((field) => {
       const value = formData[field as keyof typeof formData];
       const error = validateField(field, value);
-      if (error) {
-        newErrors[field] = error;
-      }
+      if (error) newErrors[field] = error;
     });
 
-    // Additional check: SKU must not be empty
     if (!formData.sku || formData.sku.trim() === '') {
       newErrors.sku = 'El SKU es requerido. Haz clic en "Generar" para crear uno automáticamente.';
     }
 
-    // Check if SKU is unique (only for new products or if SKU changed)
     if (!newErrors.sku && (mode === 'create' || (product && formData.sku !== product.sku))) {
       try {
         const existing = await db.products.where('sku').equals(formData.sku || '').first();
@@ -165,43 +140,39 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) => {
     const { name, value, type } = e.target;
-    
     let parsedValue: any = value;
-    
     if (type === 'number') {
       parsedValue = value === '' ? undefined : parseFloat(value);
       if (isNaN(parsedValue)) parsedValue = 0;
     }
-    
-    setFormData(prev => ({ ...prev, [name]: parsedValue }));
-    
-    // Validate on change
+    setFormData((prev) => ({ ...prev, [name]: parsedValue }));
     const error = validateField(name, parsedValue);
-    setErrors(prev => ({ ...prev, [name]: error }));
+    setErrors((prev) => ({ ...prev, [name]: error }));
   };
 
-  const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleBlur = (
+    e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) => {
     const { name } = e.target;
-    setTouched(prev => ({ ...prev, [name]: true }));
+    setTouched((prev) => ({ ...prev, [name]: true }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Mark all fields as touched
+
     const allTouched: Record<string, boolean> = {};
-    Object.keys(formData).forEach(key => {
+    Object.keys(formData).forEach((key) => {
       allTouched[key] = true;
     });
     setTouched(allTouched);
-    
-    // Wait for validation (including async SKU check)
+
     const isValid = await validateForm();
     if (!isValid) {
-      // Focus on the first field with error
-      const firstErrorField = Object.keys(errors).find(key => errors[key]);
+      const firstErrorField = Object.keys(errors).find((key) => errors[key]);
       if (firstErrorField) {
         const element = document.getElementById(firstErrorField);
         element?.focus();
@@ -210,13 +181,12 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
     }
 
     const now = new Date();
-    
-    // Helper to convert empty strings to undefined
+
     const cleanString = (value: string | undefined): string | undefined => {
       if (!value || value.trim() === '') return undefined;
       return value.trim();
     };
-    
+
     const productData: Product = {
       ...formData,
       name: formData.name!.trim(),
@@ -235,26 +205,34 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
     if (process.env.NODE_ENV === 'development') {
       console.log('Submitting product:', productData);
     }
-    
+
     onSubmit(productData);
   };
 
+  const fieldErrCls = (field: string) =>
+    errors[field] && touched[field] ? 'pm-input pm-input-error' : 'pm-input';
+
+  const margin =
+    formData.costUsd && formData.priceUsd && formData.costUsd > 0
+      ? ((formData.priceUsd - formData.costUsd) / formData.priceUsd) * 100
+      : null;
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {/* Basic Information */}
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <Package className="h-5 w-5 mr-2" />
+      <section className="pm-section">
+        <h3 className="pm-section-title">
+          <Package className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
           Información Básica
         </h3>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* SKU */}
           <div>
-            <label htmlFor="sku" className="block text-sm font-medium text-gray-700">
-              SKU <span className="text-red-500">*</span>
+            <label htmlFor="sku" className="pm-label">
+              SKU <span style={{ color: TOKENS.red }}>*</span>
             </label>
-            <div className="mt-1 flex rounded-md shadow-sm">
+            <div className="flex">
               <input
                 type="text"
                 name="sku"
@@ -263,9 +241,13 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
                 onChange={handleChange}
                 onBlur={handleBlur}
                 disabled={isGeneratingSKU}
-                className={`flex-1 block w-full rounded-l-md border-gray-300 focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100 ${
-                  errors.sku && touched.sku ? 'border-red-500' : ''
-                }`}
+                className={fieldErrCls('sku')}
+                style={{
+                  borderTopRightRadius: mode === 'create' ? 0 : undefined,
+                  borderBottomRightRadius: mode === 'create' ? 0 : undefined,
+                  borderRight: mode === 'create' ? 'none' : undefined,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                }}
                 placeholder="PROD-XXXXXX"
               />
               {mode === 'create' && (
@@ -273,24 +255,52 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
                   type="button"
                   onClick={generateNewSKU}
                   disabled={isGeneratingSKU}
-                  className="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 text-sm hover:bg-gray-100"
+                  className="inline-flex items-center px-3 text-[12px] font-semibold transition-colors"
+                  style={{
+                    background: TOKENS.slate100,
+                    color: TOKENS.charcoal,
+                    border: `1px solid ${TOKENS.slate300}`,
+                    borderTopRightRadius: '0.25rem',
+                    borderBottomRightRadius: '0.25rem',
+                  }}
                 >
-                  {isGeneratingSKU ? '...' : 'Generar'}
+                  {isGeneratingSKU ? '…' : 'Generar'}
                 </button>
               )}
             </div>
-            {errors.sku && touched.sku && (
-              <p className="mt-1 text-sm text-red-600">{errors.sku}</p>
+            {errors.sku && touched.sku ? (
+              <p className="pm-error">{errors.sku}</p>
+            ) : (
+              <p className="pm-hint">SKU único auto-generado. Puedes modificarlo si es necesario.</p>
             )}
-            <p className="mt-1 text-xs text-gray-500">
-              SKU único auto-generado. Puedes modificarlo si es necesario.
-            </p>
+          </div>
+
+          {/* Category */}
+          <div>
+            <label htmlFor="category" className="pm-label">
+              <Tag className="h-3 w-3 inline mr-1" />
+              Categoría
+            </label>
+            <select
+              name="category"
+              id="category"
+              value={formData.category}
+              onChange={handleChange}
+              className="pm-input"
+            >
+              <option value="">Seleccionar categoría…</option>
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Name */}
           <div className="md:col-span-2">
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-              Nombre del Producto <span className="text-red-500">*</span>
+            <label htmlFor="name" className="pm-label">
+              Nombre del Producto <span style={{ color: TOKENS.red }}>*</span>
             </label>
             <input
               type="text"
@@ -299,19 +309,15 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
               value={formData.name}
               onChange={handleChange}
               onBlur={handleBlur}
-              className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                errors.name && touched.name ? 'border-red-500' : ''
-              }`}
+              className={fieldErrCls('name')}
               placeholder="Ej: Aceite de Motor 10W-40 1L"
             />
-            {errors.name && touched.name && (
-              <p className="mt-1 text-sm text-red-600">{errors.name}</p>
-            )}
+            {errors.name && touched.name && <p className="pm-error">{errors.name}</p>}
           </div>
 
           {/* Description */}
           <div className="md:col-span-2">
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="description" className="pm-label">
               Descripción
             </label>
             <textarea
@@ -320,35 +326,15 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
               rows={2}
               value={formData.description}
               onChange={handleChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="Descripción detallada del producto..."
+              className="pm-input"
+              placeholder="Descripción detallada del producto…"
             />
           </div>
 
-          {/* Category */}
-          <div>
-            <label htmlFor="category" className="block text-sm font-medium text-gray-700">
-              <Tag className="h-4 w-4 inline mr-1" />
-              Categoría
-            </label>
-            <select
-              name="category"
-              id="category"
-              value={formData.category}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              <option value="">Seleccionar categoría...</option>
-              {CATEGORIES.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-
           {/* Barcode */}
-          <div>
-            <label htmlFor="barcode" className="block text-sm font-medium text-gray-700">
-              <Barcode className="h-4 w-4 inline mr-1" />
+          <div className="md:col-span-2">
+            <label htmlFor="barcode" className="pm-label">
+              <Barcode className="h-3 w-3 inline mr-1" />
               Código de Barras
             </label>
             <input
@@ -357,121 +343,113 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
               id="barcode"
               value={formData.barcode}
               onChange={handleChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="pm-input"
               placeholder="Ej: 7501234567890"
+              style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
             />
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Pricing */}
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <DollarSign className="h-5 w-5 mr-2" />
+      <section className="pm-section">
+        <h3 className="pm-section-title">
+          <DollarSign className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
           Precios
         </h3>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Cost */}
           <div>
-            <label htmlFor="costUsd" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="costUsd" className="pm-label">
               Costo (USD)
             </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm">$</span>
-              </div>
-              <input
-                type="number"
-                name="costUsd"
-                id="costUsd"
-                min="0"
-                step="0.01"
-                value={formData.costUsd || ''}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                className={`block w-full pl-7 pr-12 rounded-md border-gray-300 focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                  errors.costUsd && touched.costUsd ? 'border-red-500' : ''
-                }`}
-                placeholder="0.00"
-              />
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm">USD</span>
-              </div>
-            </div>
-            {errors.costUsd && touched.costUsd && (
-              <p className="mt-1 text-sm text-red-600">{errors.costUsd}</p>
-            )}
+            <MoneyInput
+              name="costUsd"
+              id="costUsd"
+              value={formData.costUsd}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              hasError={!!(errors.costUsd && touched.costUsd)}
+            />
+            {errors.costUsd && touched.costUsd && <p className="pm-error">{errors.costUsd}</p>}
           </div>
 
           {/* Price */}
           <div>
-            <label htmlFor="priceUsd" className="block text-sm font-medium text-gray-700">
-              Precio de Venta (USD) <span className="text-red-500">*</span>
+            <label htmlFor="priceUsd" className="pm-label">
+              Precio de Venta (USD) <span style={{ color: TOKENS.red }}>*</span>
             </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm">$</span>
-              </div>
-              <input
-                type="number"
-                name="priceUsd"
-                id="priceUsd"
-                min="0"
-                step="0.01"
-                required
-                value={formData.priceUsd || ''}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                className={`block w-full pl-7 pr-12 rounded-md border-gray-300 focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                  errors.priceUsd && touched.priceUsd ? 'border-red-500' : ''
-                }`}
-                placeholder="0.00"
-              />
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm">USD</span>
-              </div>
-            </div>
+            <MoneyInput
+              name="priceUsd"
+              id="priceUsd"
+              value={formData.priceUsd}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              required
+              hasError={!!(errors.priceUsd && touched.priceUsd)}
+            />
             {errors.priceUsd && touched.priceUsd && (
-              <p className="mt-1 text-sm text-red-600">{errors.priceUsd}</p>
+              <p className="pm-error">{errors.priceUsd}</p>
             )}
           </div>
 
           {/* Margin indicator */}
-          {formData.costUsd && formData.priceUsd && formData.costUsd > 0 && (
+          {margin !== null && (
             <div className="md:col-span-2">
-              <div className="flex items-center text-sm">
-                <span className="text-gray-600">Margen de ganancia: </span>
-                <span className={`ml-2 font-semibold ${
-                  ((formData.priceUsd - formData.costUsd) / formData.priceUsd * 100) > 20 
-                    ? 'text-green-600' 
-                    : 'text-yellow-600'
-                }`}>
-                  {((formData.priceUsd - formData.costUsd) / formData.priceUsd * 100).toFixed(1)}%
-                </span>
-                <span className="mx-2 text-gray-400">|</span>
-                <span className="text-gray-600">Ganancia: </span>
-                <span className="ml-2 font-semibold text-green-600">
-                  ${(formData.priceUsd - formData.costUsd).toFixed(2)}
-                </span>
+              <div
+                className="flex items-center gap-3 px-3 py-2 rounded"
+                style={{
+                  background: TOKENS.slate50,
+                  border: `1px solid ${TOKENS.slate200}`,
+                }}
+              >
+                <div>
+                  <div
+                    className="text-[11px] font-bold uppercase tracking-[0.05em]"
+                    style={{ color: TOKENS.slate500 }}
+                  >
+                    Margen
+                  </div>
+                  <div
+                    className="pm-tnum font-bold text-[16px]"
+                    style={{ color: margin > 20 ? TOKENS.green : TOKENS.amber }}
+                  >
+                    {margin.toFixed(1)}%
+                  </div>
+                </div>
+                <div className="h-8 w-px" style={{ background: TOKENS.slate200 }} />
+                <div>
+                  <div
+                    className="text-[11px] font-bold uppercase tracking-[0.05em]"
+                    style={{ color: TOKENS.slate500 }}
+                  >
+                    Ganancia
+                  </div>
+                  <div
+                    className="pm-tnum font-bold text-[16px]"
+                    style={{ color: TOKENS.charcoal }}
+                  >
+                    ${(formData.priceUsd! - formData.costUsd!).toFixed(2)}
+                  </div>
+                </div>
               </div>
             </div>
           )}
         </div>
-      </div>
+      </section>
 
       {/* Inventory */}
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <Box className="h-5 w-5 mr-2" />
+      <section className="pm-section">
+        <h3 className="pm-section-title">
+          <Box className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
           Inventario
         </h3>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Stock Quantity */}
           <div>
-            <label htmlFor="stockQuantity" className="block text-sm font-medium text-gray-700">
-              Stock Actual <span className="text-red-500">*</span>
+            <label htmlFor="stockQuantity" className="pm-label">
+              Stock Actual <span style={{ color: TOKENS.red }}>*</span>
             </label>
             <input
               type="number"
@@ -483,19 +461,16 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
               value={formData.stockQuantity}
               onChange={handleChange}
               onBlur={handleBlur}
-              className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                errors.stockQuantity && touched.stockQuantity ? 'border-red-500' : ''
-              }`}
+              className={`${fieldErrCls('stockQuantity')} pm-tnum`}
             />
             {errors.stockQuantity && touched.stockQuantity && (
-              <p className="mt-1 text-sm text-red-600">{errors.stockQuantity}</p>
+              <p className="pm-error">{errors.stockQuantity}</p>
             )}
           </div>
 
-          {/* Min Stock Alert */}
           <div>
-            <label htmlFor="minStockAlert" className="block text-sm font-medium text-gray-700">
-              <AlertCircle className="h-4 w-4 inline mr-1" />
+            <label htmlFor="minStockAlert" className="pm-label">
+              <AlertCircle className="h-3 w-3 inline mr-1" />
               Stock Mínimo
             </label>
             <input
@@ -507,17 +482,14 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
               value={formData.minStockAlert}
               onChange={handleChange}
               onBlur={handleBlur}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="pm-input pm-tnum"
             />
-            <p className="mt-1 text-xs text-gray-500">
-              Alerta cuando stock sea menor o igual a este valor
-            </p>
+            <p className="pm-hint">Alerta cuando stock sea menor o igual a este valor</p>
           </div>
 
-          {/* Location */}
           <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700">
-              <MapPin className="h-4 w-4 inline mr-1" />
+            <label htmlFor="location" className="pm-label">
+              <MapPin className="h-3 w-3 inline mr-1" />
               Ubicación
             </label>
             <input
@@ -526,22 +498,22 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
               id="location"
               value={formData.location}
               onChange={handleChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="pm-input"
               placeholder="Ej: Estante A-3"
             />
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Supplier */}
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <Building2 className="h-5 w-5 mr-2" />
+      <section className="pm-section">
+        <h3 className="pm-section-title">
+          <Building2 className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
           Proveedor
         </h3>
-        
+
         <div>
-          <label htmlFor="supplier" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="supplier" className="pm-label">
             Nombre del Proveedor
           </label>
           <input
@@ -550,28 +522,73 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
             id="supplier"
             value={formData.supplier}
             onChange={handleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className="pm-input"
             placeholder="Ej: Proveedor A"
           />
         </div>
-      </div>
+      </section>
 
       {/* Actions */}
-      <div className="flex justify-end space-x-3 pt-4 border-t">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
+      <div
+        className="flex justify-end gap-2 pt-3"
+        style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+      >
+        <PMBtnSecondary type="button" onClick={onCancel}>
           Cancelar
-        </button>
-        <button
-          type="submit"
-          className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
+        </PMBtnSecondary>
+        <PMBtnPrimary type="submit">
           {mode === 'create' ? 'Crear Producto' : 'Guardar Cambios'}
-        </button>
+        </PMBtnPrimary>
       </div>
     </form>
+  );
+}
+
+function MoneyInput({
+  name,
+  id,
+  value,
+  onChange,
+  onBlur,
+  required,
+  hasError,
+}: {
+  name: string;
+  id: string;
+  value: number | undefined;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
+  required?: boolean;
+  hasError?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <span
+        className="absolute inset-y-0 left-0 pl-2.5 flex items-center text-[13px] pointer-events-none"
+        style={{ color: TOKENS.slate500 }}
+      >
+        $
+      </span>
+      <input
+        type="number"
+        name={name}
+        id={id}
+        min="0"
+        step="0.01"
+        required={required}
+        value={value ?? ''}
+        onChange={onChange}
+        onBlur={onBlur}
+        className={`pm-tnum ${hasError ? 'pm-input pm-input-error' : 'pm-input'}`}
+        placeholder="0.00"
+        style={{ paddingLeft: '1.5rem', paddingRight: '3rem' }}
+      />
+      <span
+        className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-[11px] font-bold uppercase tracking-wider pointer-events-none"
+        style={{ color: TOKENS.slate400 }}
+      >
+        USD
+      </span>
+    </div>
   );
 }

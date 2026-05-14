@@ -1,28 +1,33 @@
 "use client";
 
 import React, { useState } from 'react';
-import { 
-  Target, 
-  TrendingUp, 
-  DollarSign, 
-  Calendar, 
+import {
+  Target,
+  TrendingUp,
+  DollarSign,
+  Calendar,
   Plus,
   Edit,
   Trash2,
   CheckCircle,
   AlertCircle,
-  TrendingDown,
-  ArrowRightLeft,
-  BarChart3
+  BarChart3,
+  X,
 } from 'lucide-react';
 import { usePuntoEquilibrio } from '@/app/_hooks/usePuntoEquilibrio';
 import { useNotifications } from '@/app/_components/NotificationProvider';
 import { GastoFijo } from '@/app/_db/db';
+import {
+  PMScope,
+  TOKENS,
+  PMBtnPrimary,
+  PMBtnSecondary,
+} from '@/app/_components/_pmTheme';
 
 export default function PuntoEquilibrioPage() {
-  const { 
-    estado, 
-    cargando, 
+  const {
+    estado,
+    cargando,
     error,
     guardarGastoFijo,
     actualizarGastoFijo,
@@ -33,13 +38,11 @@ export default function PuntoEquilibrioPage() {
   } = usePuntoEquilibrio();
 
   const { success, error: showError } = useNotifications();
-  
+
   const [showGastoForm, setShowGastoForm] = useState(false);
-  const [showMetaForm, setShowMetaForm] = useState(false);
   const [editingGasto, setEditingGasto] = useState<GastoFijo | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'gastos' | 'config'>('dashboard');
 
-  // Form states
   const [gastoForm, setGastoForm] = useState<{
     nombre: string;
     montoUSD: number;
@@ -62,42 +65,34 @@ export default function PuntoEquilibrioPage() {
 
   const handleSaveGasto = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Debug: mostrar datos del formulario
-    console.log('=== DEBUG: Guardando gasto ===');
-    console.log('Formulario:', gastoForm);
-    console.log('Editando:', editingGasto);
-    
     try {
       if (editingGasto?.id) {
-        console.log('Actualizando gasto existente ID:', editingGasto.id);
         await actualizarGastoFijo(editingGasto.id, {
           ...gastoForm,
           updatedAt: new Date(),
         });
         success('Gasto actualizado', 'El gasto fijo ha sido actualizado');
       } else {
-        console.log('Creando nuevo gasto...');
         const now = new Date();
-        const gastoData = {
+        await guardarGastoFijo({
           ...gastoForm,
           activo: true,
           fechaInicio: now,
           createdAt: now,
           updatedAt: now,
-        };
-        console.log('Datos a guardar:', gastoData);
-        
-        const id = await guardarGastoFijo(gastoData);
-        console.log('Gasto guardado con ID:', id);
+        });
         success('Gasto agregado', 'El gasto fijo ha sido registrado exitosamente');
       }
       setShowGastoForm(false);
       setEditingGasto(null);
-      setGastoForm({ nombre: '', montoUSD: 0, categoria: 'fijo', frecuencia: 'mensual', notas: '' });
+      setGastoForm({
+        nombre: '',
+        montoUSD: 0,
+        categoria: 'fijo',
+        frecuencia: 'mensual',
+        notas: '',
+      });
     } catch (err: any) {
-      console.error('Error al guardar:', err);
-      console.error('Stack:', err.stack);
       showError('Error', `No se pudo guardar el gasto: ${err.message}`);
     }
   };
@@ -108,11 +103,10 @@ export default function PuntoEquilibrioPage() {
       await guardarConfiguracionMeta(
         metaForm.utilidadDeseadaUSD,
         metaForm.margenPromedioEsperado,
-        metaForm.diasLaborales
+        metaForm.diasLaborales,
       );
       success('Configuración guardada', 'La meta del mes ha sido configurada');
-      setShowMetaForm(false);
-    } catch (err) {
+    } catch {
       showError('Error', 'No se pudo guardar la configuración');
     }
   };
@@ -122,7 +116,7 @@ export default function PuntoEquilibrioPage() {
     try {
       await eliminarGastoFijo(id);
       success('Gasto eliminado', 'El gasto ha sido eliminado');
-    } catch (err) {
+    } catch {
       showError('Error', 'No se pudo eliminar el gasto');
     }
   };
@@ -132,10 +126,18 @@ export default function PuntoEquilibrioPage() {
 
   if (cargando) {
     return (
-      <div className="container mx-auto p-8 flex items-center justify-center min-h-screen">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Calculando métricas...</p>
+          <div
+            className="animate-spin rounded-full h-10 w-10 mx-auto mb-3"
+            style={{
+              border: `3px solid ${TOKENS.slate200}`,
+              borderTopColor: TOKENS.orange,
+            }}
+          />
+          <p className="text-[13px]" style={{ color: TOKENS.slate500 }}>
+            Calculando métricas…
+          </p>
         </div>
       </div>
     );
@@ -143,11 +145,23 @@ export default function PuntoEquilibrioPage() {
 
   if (error) {
     return (
-      <div className="container mx-auto p-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-red-800 mb-2">Error al cargar datos</h2>
-          <p className="text-red-600">{error}</p>
+      <div className="min-h-screen">
+        <div className="max-w-2xl mx-auto p-8">
+          <div
+            className="rounded p-6 text-center"
+            style={{ background: TOKENS.redSoft, border: `1px solid ${TOKENS.red}` }}
+          >
+            <AlertCircle
+              className="h-10 w-10 mx-auto mb-3"
+              style={{ color: TOKENS.red }}
+            />
+            <h2 className="text-[16px] font-bold mb-1" style={{ color: TOKENS.red }}>
+              Error al cargar datos
+            </h2>
+            <p className="text-[13px]" style={{ color: TOKENS.red }}>
+              {error}
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -155,509 +169,834 @@ export default function PuntoEquilibrioPage() {
 
   const { calculos, progreso, gastosFijos } = estado;
 
+  const tabs = [
+    { value: 'dashboard', label: 'Dashboard' },
+    { value: 'gastos', label: 'Gastos' },
+    { value: 'config', label: 'Configuración' },
+  ] as const;
+
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-            <Target className="h-8 w-8 mr-3 text-blue-600" />
-            Punto de Equilibrio
-          </h1>
-          <p className="text-gray-600 mt-1 capitalize">{nombreMes}</p>
-        </div>
-        
-        <div className="flex gap-2">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              activeTab === 'dashboard' 
-                ? 'bg-blue-100 text-blue-700' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Dashboard
-          </button>
-          <button
-            onClick={() => setActiveTab('gastos')}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              activeTab === 'gastos' 
-                ? 'bg-blue-100 text-blue-700' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Gastos
-          </button>
-          <button
-            onClick={() => setActiveTab('config')}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              activeTab === 'config' 
-                ? 'bg-blue-100 text-blue-700' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Configuración
-          </button>
-        </div>
-      </div>
-
-      {/* Dashboard Tab */}
-      {activeTab === 'dashboard' && (
-        <>
-          {/* KPIs Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Punto de Equilibrio */}
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-6 shadow-sm border border-orange-200">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-orange-800">Punto de Equilibrio</h3>
-                <TrendingUp className="h-5 w-5 text-orange-600" />
+    <div className="min-h-screen">
+      <div className="max-w-[1440px] mx-auto px-6 py-6 space-y-5">
+        {/* Header */}
+        <div className="flex items-end justify-between flex-wrap gap-3">
+          <div>
+            <div className="pm-eyebrow mb-1">Finanzas / Meta Mensual</div>
+            <div className="flex items-center gap-2.5">
+              <div
+                className="flex items-center justify-center h-9 w-9 rounded"
+                style={{ background: TOKENS.charcoal, color: '#fff' }}
+              >
+                <Target className="h-4 w-4" />
               </div>
-              <p className="text-3xl font-bold text-orange-900">
-                {formatearUSD(calculos.puntoEquilibrio)}
-              </p>
-              <p className="text-sm text-orange-700 mt-2">
-                Ventas mínimas para cubrir costos
-              </p>
-              {progreso.ventasMesActual >= calculos.puntoEquilibrio && (
-                <div className="mt-3 flex items-center text-green-700 text-sm">
-                  <CheckCircle className="h-4 w-4 mr-1" />
-                  ¡Punto de equilibrio alcanzado!
-                </div>
-              )}
-            </div>
-
-            {/* Meta Mensual */}
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 shadow-sm border border-blue-200">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-blue-800">Meta Mensual</h3>
-                <Target className="h-5 w-5 text-blue-600" />
-              </div>
-              <p className="text-3xl font-bold text-blue-900">
-                {formatearUSD(calculos.metaMensual)}
-              </p>
-              <p className="text-sm text-blue-700 mt-2">
-                Incluye utilidad deseada
-              </p>
-              <div className="mt-3">
-                <div className="flex justify-between text-xs text-blue-700 mb-1">
-                  <span>Progreso: {formatearPorcentaje(progreso.porcentajeCumplimiento)}</span>
-                </div>
-                <div className="w-full bg-blue-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all"
-                    style={{ width: `${Math.min(progreso.porcentajeCumplimiento, 100)}%` }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Meta Diaria */}
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 shadow-sm border border-green-200">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-green-800">Meta Diaria</h3>
-                <Calendar className="h-5 w-5 text-green-600" />
-              </div>
-              <p className="text-3xl font-bold text-green-900">
-                {formatearUSD(calculos.metaDiaria)}
-              </p>
-              <p className="text-sm text-green-700 mt-2">
-                Promedio por día laboral
-              </p>
-              <div className="mt-3">
-                {progreso.metaDiariaCumplida ? (
-                  <div className="flex items-center text-green-700 text-sm">
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    Hoy: {formatearUSD(progreso.ventasHoy)} ✓
-                  </div>
-                ) : (
-                  <div className="flex items-center text-orange-600 text-sm">
-                    <AlertCircle className="h-4 w-4 mr-1" />
-                    Hoy: {formatearUSD(progreso.ventasHoy)}
-                  </div>
-                )}
+              <div>
+                <h1
+                  className="text-[24px] font-bold leading-8 tracking-[-0.02em]"
+                  style={{ color: TOKENS.charcoal }}
+                >
+                  Punto de Equilibrio
+                </h1>
+                <p
+                  className="text-[13px] capitalize"
+                  style={{ color: TOKENS.slate500 }}
+                >
+                  {nombreMes}
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Progreso del Mes */}
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <BarChart3 className="h-5 w-5 mr-2" />
-              Progreso del Mes
-            </h3>
-            
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-sm text-gray-600">Ventas del mes</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {formatearUSD(progreso.ventasMesActual)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">Meta</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {formatearUSD(calculos.metaMensual)}
-                  </p>
-                </div>
-              </div>
+          {/* Tabs */}
+          <div
+            className="inline-flex p-1 rounded"
+            style={{
+              background: '#fff',
+              border: `1px solid ${TOKENS.slate200}`,
+            }}
+          >
+            {tabs.map((tab) => {
+              const active = activeTab === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() => setActiveTab(tab.value)}
+                  className="px-3 h-8 rounded text-[12px] font-semibold transition-colors"
+                  style={{
+                    background: active ? TOKENS.charcoal : 'transparent',
+                    color: active ? '#fff' : TOKENS.slate500,
+                  }}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-              {/* Barra de progreso */}
-              <div className="relative pt-1">
-                <div className="flex mb-2 items-center justify-between">
-                  <div>
-                    <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200">
+        {/* Dashboard tab */}
+        {activeTab === 'dashboard' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Punto de Equilibrio */}
+              <KpiCard
+                label="Punto de Equilibrio"
+                value={formatearUSD(calculos.puntoEquilibrio)}
+                icon={<TrendingUp className="h-4 w-4" />}
+                hint="Ventas mínimas para cubrir costos"
+                footer={
+                  progreso.ventasMesActual >= calculos.puntoEquilibrio ? (
+                    <span
+                      className="inline-flex items-center gap-1 text-[12px] font-bold"
+                      style={{ color: TOKENS.green }}
+                    >
+                      <CheckCircle className="h-3.5 w-3.5" />
+                      Alcanzado
+                    </span>
+                  ) : undefined
+                }
+              />
+
+              {/* Meta Mensual */}
+              <div className="pm-card px-4 py-3">
+                <div className="pm-eyebrow flex items-center justify-between">
+                  <span>Meta Mensual</span>
+                  <Target className="h-3.5 w-3.5" style={{ color: TOKENS.slate400 }} />
+                </div>
+                <div
+                  className="pm-tnum text-[24px] font-bold leading-8 tracking-[-0.02em] mt-1"
+                  style={{ color: TOKENS.charcoal }}
+                >
+                  {formatearUSD(calculos.metaMensual)}
+                </div>
+                <div className="text-[12px] mt-0.5" style={{ color: TOKENS.slate500 }}>
+                  Incluye utilidad deseada
+                </div>
+                <div className="mt-3">
+                  <div
+                    className="flex justify-between text-[11px] mb-1 pm-tnum"
+                    style={{ color: TOKENS.slate500 }}
+                  >
+                    <span>Progreso</span>
+                    <span className="font-bold">
                       {formatearPorcentaje(progreso.porcentajeCumplimiento)}
                     </span>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs font-semibold inline-block text-gray-600">
-                      Faltan: {formatearUSD(progreso.faltanteParaMeta)}
-                    </span>
+                  <div
+                    className="h-2 rounded overflow-hidden"
+                    style={{ background: TOKENS.slate100 }}
+                  >
+                    <div
+                      className="h-full transition-all"
+                      style={{
+                        width: `${Math.min(progreso.porcentajeCumplimiento, 100)}%`,
+                        background:
+                          progreso.porcentajeCumplimiento >= 100
+                            ? TOKENS.green
+                            : TOKENS.orange,
+                      }}
+                    />
                   </div>
                 </div>
-                <div className="overflow-hidden h-4 mb-4 text-xs flex rounded bg-gray-200">
-                  <div 
-                    style={{ width: `${Math.min(progreso.porcentajeCumplimiento, 100)}%` }}
-                    className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-500 ${
-                      progreso.porcentajeCumplimiento >= 100 
-                        ? 'bg-green-500' 
-                        : progreso.porcentajeCumplimiento >= 50 
-                          ? 'bg-blue-500' 
-                          : 'bg-orange-500'
-                    }`}
-                  ></div>
-                </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
-                <div>
-                  <p className="text-xs text-gray-500">Días restantes</p>
-                  <p className="text-lg font-semibold">{progreso.diasRestantes}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Margen promedio</p>
-                  <p className="text-lg font-semibold">{formatearPorcentaje(calculos.margenPromedio)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Proyección final</p>
-                  <p className={`text-lg font-semibold ${progreso.proyeccionFinal >= calculos.metaMensual ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatearUSD(progreso.proyeccionFinal)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Costos fijos</p>
-                  <p className="text-lg font-semibold">{formatearUSD(calculos.costosFijosTotales)}</p>
-                </div>
-              </div>
+              {/* Meta Diaria */}
+              <KpiCard
+                label="Meta Diaria"
+                value={formatearUSD(calculos.metaDiaria)}
+                icon={<Calendar className="h-4 w-4" />}
+                hint="Promedio por día laboral"
+                footer={
+                  progreso.metaDiariaCumplida ? (
+                    <span
+                      className="inline-flex items-center gap-1 text-[12px] font-bold"
+                      style={{ color: TOKENS.green }}
+                    >
+                      <CheckCircle className="h-3.5 w-3.5" />
+                      Hoy: {formatearUSD(progreso.ventasHoy)}
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 text-[12px]"
+                      style={{ color: TOKENS.amber }}
+                    >
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      Hoy: {formatearUSD(progreso.ventasHoy)}
+                    </span>
+                  )
+                }
+              />
             </div>
-          </div>
 
-          {/* Resumen de Gastos */}
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                <DollarSign className="h-5 w-5 mr-2" />
-                Resumen de Gastos Fijos
+            {/* Progress block */}
+            <section className="pm-card p-5">
+              <h3 className="pm-section-title">
+                <BarChart3 className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
+                Progreso del Mes
               </h3>
-              <button
-                onClick={() => setActiveTab('gastos')}
-                className="text-sm text-blue-600 hover:text-blue-800"
-              >
-                Ver todos →
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-xs text-gray-500">Total gastos</p>
-                <p className="text-xl font-bold">{formatearUSD(calculos.costosFijosTotales)}</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-xs text-gray-500">Cantidad</p>
-                <p className="text-xl font-bold">{gastosFijos.length}</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-xs text-gray-500">Gastos fijos</p>
-                <p className="text-xl font-bold">
-                  {gastosFijos.filter(g => g.categoria === 'fijo').length}
-                </p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-xs text-gray-500">Variables</p>
-                <p className="text-xl font-bold">
-                  {gastosFijos.filter(g => g.categoria === 'variable').length}
-                </p>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
 
-      {/* Gastos Tab */}
-      {activeTab === 'gastos' && (
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
-          <div className="p-6 border-b flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-gray-900">Gestión de Gastos Fijos</h3>
-            <button
-              onClick={() => {
-                setEditingGasto(null);
-                setGastoForm({ nombre: '', montoUSD: 0, categoria: 'fijo', frecuencia: 'mensual', notas: '' });
-                setShowGastoForm(true);
+              <div className="flex justify-between items-end gap-4 flex-wrap">
+                <div>
+                  <div className="pm-eyebrow">Ventas del mes</div>
+                  <div
+                    className="pm-tnum text-[28px] font-bold leading-9 tracking-[-0.02em] mt-0.5"
+                    style={{ color: TOKENS.charcoal }}
+                  >
+                    {formatearUSD(progreso.ventasMesActual)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="pm-eyebrow">Meta</div>
+                  <div
+                    className="pm-tnum text-[20px] font-bold leading-7 tracking-[-0.01em] mt-0.5"
+                    style={{ color: TOKENS.slate500 }}
+                  >
+                    {formatearUSD(calculos.metaMensual)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <div
+                  className="flex justify-between mb-1.5 text-[11px] pm-tnum"
+                  style={{ color: TOKENS.slate500 }}
+                >
+                  <span
+                    className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider"
+                    style={{
+                      background:
+                        progreso.porcentajeCumplimiento >= 100
+                          ? TOKENS.greenSoft
+                          : progreso.porcentajeCumplimiento >= 50
+                          ? TOKENS.orangeSoft
+                          : TOKENS.amberSoft,
+                      color:
+                        progreso.porcentajeCumplimiento >= 100
+                          ? TOKENS.green
+                          : progreso.porcentajeCumplimiento >= 50
+                          ? TOKENS.orange
+                          : TOKENS.amber,
+                    }}
+                  >
+                    {formatearPorcentaje(progreso.porcentajeCumplimiento)}
+                  </span>
+                  <span>Faltan: {formatearUSD(progreso.faltanteParaMeta)}</span>
+                </div>
+                <div
+                  className="h-3 rounded overflow-hidden"
+                  style={{ background: TOKENS.slate100 }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.min(progreso.porcentajeCumplimiento, 100)}%`,
+                      background:
+                        progreso.porcentajeCumplimiento >= 100
+                          ? TOKENS.green
+                          : progreso.porcentajeCumplimiento >= 50
+                          ? `linear-gradient(90deg, ${TOKENS.charcoal}, ${TOKENS.orange})`
+                          : TOKENS.amber,
+                      transition: 'width 500ms',
+                    }}
+                    className="h-full"
+                  />
+                </div>
+              </div>
+
+              <div
+                className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 mt-4"
+                style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+              >
+                <MicroStat label="Días restantes" value={progreso.diasRestantes.toString()} />
+                <MicroStat
+                  label="Margen promedio"
+                  value={formatearPorcentaje(calculos.margenPromedio)}
+                />
+                <MicroStat
+                  label="Proyección final"
+                  value={formatearUSD(progreso.proyeccionFinal)}
+                  tone={
+                    progreso.proyeccionFinal >= calculos.metaMensual ? 'success' : 'danger'
+                  }
+                />
+                <MicroStat
+                  label="Costos fijos"
+                  value={formatearUSD(calculos.costosFijosTotales)}
+                />
+              </div>
+            </section>
+
+            {/* Resumen gastos */}
+            <section className="pm-card p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="pm-section-title m-0" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+                  <DollarSign className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
+                  Resumen de Gastos Fijos
+                </h3>
+                <button
+                  onClick={() => setActiveTab('gastos')}
+                  className="text-[12px] font-semibold"
+                  style={{ color: TOKENS.orange }}
+                >
+                  Ver todos →
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <MicroStat
+                  label="Total gastos"
+                  value={formatearUSD(calculos.costosFijosTotales)}
+                />
+                <MicroStat label="Cantidad" value={gastosFijos.length.toString()} />
+                <MicroStat
+                  label="Fijos"
+                  value={gastosFijos.filter((g) => g.categoria === 'fijo').length.toString()}
+                />
+                <MicroStat
+                  label="Variables"
+                  value={gastosFijos
+                    .filter((g) => g.categoria === 'variable')
+                    .length.toString()}
+                />
+              </div>
+            </section>
+          </>
+        )}
+
+        {/* Gastos tab */}
+        {activeTab === 'gastos' && (
+          <section className="pm-card overflow-hidden">
+            <div
+              className="flex items-center justify-between px-4 py-2.5"
+              style={{
+                borderBottom: `1px solid ${TOKENS.slate200}`,
+                background: TOKENS.slate50,
               }}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
-              <Plus className="h-4 w-4 mr-2" />
-              Agregar Gasto
-            </button>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Concepto</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Categoría</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Frecuencia</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {gastosFijos.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                      <DollarSign className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                      <p>No hay gastos registrados</p>
-                    </td>
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
+                <span className="pm-eyebrow" style={{ color: TOKENS.slate700 }}>
+                  Gestión de gastos fijos
+                </span>
+              </div>
+              <PMBtnPrimary
+                onClick={() => {
+                  setEditingGasto(null);
+                  setGastoForm({
+                    nombre: '',
+                    montoUSD: 0,
+                    categoria: 'fijo',
+                    frecuencia: 'mensual',
+                    notas: '',
+                  });
+                  setShowGastoForm(true);
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                Agregar Gasto
+              </PMBtnPrimary>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-[13px]">
+                <thead className="sticky top-0 z-10">
+                  <tr style={{ background: TOKENS.slate100 }}>
+                    <Th>Concepto</Th>
+                    <Th align="right">Monto</Th>
+                    <Th>Categoría</Th>
+                    <Th>Frecuencia</Th>
+                    <Th align="right">Acciones</Th>
                   </tr>
-                ) : (
-                  gastosFijos.map((gasto) => (
-                    <tr key={gasto.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{gasto.nombre}</p>
-                          {gasto.notas && (
-                            <p className="text-xs text-gray-500">{gasto.notas}</p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <p className="text-sm font-medium text-gray-900">
-                          {formatearUSD(gasto.montoUSD)}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`inline-flex px-2 py-1 text-xs rounded-full ${
-                          gasto.categoria === 'fijo' 
-                            ? 'bg-blue-100 text-blue-800' 
-                            : 'bg-orange-100 text-orange-800'
-                        }`}>
-                          {gasto.categoria === 'fijo' ? 'Fijo' : 'Variable'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center text-sm text-gray-600 capitalize">
-                        {gasto.frecuencia}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex justify-center space-x-2">
-                          <button
-                            onClick={() => {
-                              setEditingGasto(gasto);
-                              setGastoForm({
-                                nombre: gasto.nombre,
-                                montoUSD: gasto.montoUSD,
-                                categoria: gasto.categoria,
-                                frecuencia: gasto.frecuencia,
-                                notas: gasto.notas || '',
-                              });
-                              setShowGastoForm(true);
-                            }}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => gasto.id && handleDeleteGasto(gasto.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
+                </thead>
+                <tbody>
+                  {gastosFijos.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="py-12 text-center"
+                        style={{ color: TOKENS.slate500 }}
+                      >
+                        <DollarSign
+                          className="h-10 w-10 mx-auto mb-3"
+                          style={{ color: TOKENS.slate300 }}
+                        />
+                        <p className="text-[13px]">No hay gastos registrados</p>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Config Tab */}
-      {activeTab === 'config' && (
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Configuración de Metas</h3>
-          
-          <form onSubmit={handleSaveMeta} className="space-y-4 max-w-lg">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Utilidad Deseada (USD)
-              </label>
-              <input
-                type="number"
-                value={metaForm.utilidadDeseadaUSD}
-                onChange={(e) => setMetaForm({ ...metaForm, utilidadDeseadaUSD: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
-                placeholder="5000"
-                step="0.01"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Ganancia neta que deseas obtener este mes
-              </p>
+                  ) : (
+                    gastosFijos.map((gasto) => (
+                      <tr
+                        key={gasto.id}
+                        style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+                      >
+                        <Td>
+                          <div
+                            className="font-semibold"
+                            style={{ color: TOKENS.charcoal }}
+                          >
+                            {gasto.nombre}
+                          </div>
+                          {gasto.notas && (
+                            <div
+                              className="text-[11px] mt-0.5"
+                              style={{ color: TOKENS.slate500 }}
+                            >
+                              {gasto.notas}
+                            </div>
+                          )}
+                        </Td>
+                        <Td align="right">
+                          <span
+                            className="pm-tnum font-bold"
+                            style={{ color: TOKENS.charcoal }}
+                          >
+                            {formatearUSD(gasto.montoUSD)}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider"
+                            style={{
+                              background:
+                                gasto.categoria === 'fijo'
+                                  ? TOKENS.slate100
+                                  : TOKENS.orangeSoft,
+                              color:
+                                gasto.categoria === 'fijo'
+                                  ? TOKENS.charcoal
+                                  : TOKENS.orange,
+                            }}
+                          >
+                            {gasto.categoria === 'fijo' ? 'Fijo' : 'Variable'}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span className="capitalize" style={{ color: TOKENS.slate700 }}>
+                            {gasto.frecuencia}
+                          </span>
+                        </Td>
+                        <Td align="right">
+                          <div className="flex justify-end gap-1">
+                            <IconBtn
+                              onClick={() => {
+                                setEditingGasto(gasto);
+                                setGastoForm({
+                                  nombre: gasto.nombre,
+                                  montoUSD: gasto.montoUSD,
+                                  categoria: gasto.categoria,
+                                  frecuencia: gasto.frecuencia,
+                                  notas: gasto.notas || '',
+                                });
+                                setShowGastoForm(true);
+                              }}
+                              title="Editar"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </IconBtn>
+                            <IconBtn
+                              onClick={() => gasto.id && handleDeleteGasto(gasto.id)}
+                              title="Eliminar"
+                              danger
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </IconBtn>
+                          </div>
+                        </Td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
+          </section>
+        )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Margen Promedio Esperado (%)
-              </label>
-              <input
-                type="number"
-                value={metaForm.margenPromedioEsperado}
-                onChange={(e) => setMetaForm({ ...metaForm, margenPromedioEsperado: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
-                placeholder="30"
-                min="1"
-                max="100"
+        {/* Config tab */}
+        {activeTab === 'config' && (
+          <section className="pm-card p-5 max-w-2xl">
+            <h3 className="pm-section-title">Configuración de Metas</h3>
+
+            <form onSubmit={handleSaveMeta} className="space-y-4">
+              <div>
+                <label className="pm-label">Utilidad Deseada (USD)</label>
+                <input
+                  type="number"
+                  value={metaForm.utilidadDeseadaUSD}
+                  onChange={(e) =>
+                    setMetaForm({
+                      ...metaForm,
+                      utilidadDeseadaUSD: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  className="pm-input pm-tnum"
+                  placeholder="5000"
+                  step="0.01"
+                />
+                <p className="pm-hint">Ganancia neta que deseas obtener este mes</p>
+              </div>
+
+              <div>
+                <label className="pm-label">Margen Promedio Esperado (%)</label>
+                <input
+                  type="number"
+                  value={metaForm.margenPromedioEsperado}
+                  onChange={(e) =>
+                    setMetaForm({
+                      ...metaForm,
+                      margenPromedioEsperado: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  className="pm-input pm-tnum"
+                  placeholder="30"
+                  min="1"
+                  max="100"
+                />
+                <p className="pm-hint">
+                  Promedio actual: {formatearPorcentaje(calculos.margenPromedio)}
+                </p>
+              </div>
+
+              <div>
+                <label className="pm-label">Días Laborales del Mes</label>
+                <input
+                  type="number"
+                  value={metaForm.diasLaborales}
+                  onChange={(e) =>
+                    setMetaForm({
+                      ...metaForm,
+                      diasLaborales: parseInt(e.target.value) || 26,
+                    })
+                  }
+                  className="pm-input pm-tnum"
+                  placeholder="26"
+                  min="1"
+                  max="31"
+                />
+              </div>
+
+              <PMBtnPrimary type="submit" className="w-full h-10">
+                Guardar Configuración
+              </PMBtnPrimary>
+            </form>
+
+            {estado.meta && (
+              <div
+                className="mt-6 p-4 rounded"
+                style={{
+                  background: TOKENS.slate50,
+                  border: `1px solid ${TOKENS.slate200}`,
+                }}
+              >
+                <h4 className="pm-eyebrow mb-2">Configuración actual</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[13px]">
+                  <ConfRow
+                    label="Utilidad deseada"
+                    value={formatearUSD(estado.meta.utilidadDeseadaUSD)}
+                  />
+                  <ConfRow
+                    label="Margen esperado"
+                    value={formatearPorcentaje(estado.meta.margenPromedioEsperado)}
+                  />
+                  <ConfRow
+                    label="Días laborales"
+                    value={estado.meta.diasLaborales.toString()}
+                  />
+                  <ConfRow
+                    label="Punto de equilibrio"
+                    value={formatearUSD(estado.meta.puntoEquilibrioCalculado)}
+                  />
+                  <ConfRow
+                    label="Meta mensual"
+                    value={formatearUSD(estado.meta.metaMensualCalculada)}
+                  />
+                  <ConfRow
+                    label="Meta diaria"
+                    value={formatearUSD(estado.meta.metaDiariaCalculada)}
+                  />
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Gasto Modal */}
+        {showGastoForm && (
+          <PMScope className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <div
+                className="fixed inset-0"
+                style={{ background: 'rgba(18, 24, 38, 0.55)' }}
+                onClick={() => setShowGastoForm(false)}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Promedio actual: {formatearPorcentaje(calculos.margenPromedio)}
-              </p>
-            </div>
+              <div
+                className="relative overflow-hidden rounded w-full max-w-md pm-elevated"
+                style={{ background: '#fff', border: `1px solid ${TOKENS.slate200}` }}
+              >
+                <div
+                  className="px-5 py-3 flex justify-between items-center"
+                  style={{
+                    background: TOKENS.slate50,
+                    borderBottom: `1px solid ${TOKENS.slate200}`,
+                  }}
+                >
+                  <div>
+                    <div className="pm-eyebrow">
+                      {editingGasto ? 'Editar registro' : 'Nuevo registro'}
+                    </div>
+                    <h3
+                      className="text-[16px] font-semibold leading-5"
+                      style={{ color: TOKENS.charcoal }}
+                    >
+                      {editingGasto ? 'Editar Gasto' : 'Nuevo Gasto'}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setShowGastoForm(false)}
+                    className="inline-flex items-center justify-center h-8 w-8 rounded transition-colors"
+                    style={{ color: TOKENS.slate500 }}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Días Laborales del Mes
-              </label>
-              <input
-                type="number"
-                value={metaForm.diasLaborales}
-                onChange={(e) => setMetaForm({ ...metaForm, diasLaborales: parseInt(e.target.value) || 26 })}
-                className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
-                placeholder="26"
-                min="1"
-                max="31"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
-            >
-              Guardar Configuración
-            </button>
-          </form>
-
-          {estado.meta && (
-            <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-              <h4 className="font-medium text-gray-900 mb-2">Configuración Actual</h4>
-              <div className="space-y-2 text-sm">
-                <p><span className="text-gray-600">Utilidad deseada:</span> {formatearUSD(estado.meta.utilidadDeseadaUSD)}</p>
-                <p><span className="text-gray-600">Margen esperado:</span> {formatearPorcentaje(estado.meta.margenPromedioEsperado)}</p>
-                <p><span className="text-gray-600">Días laborales:</span> {estado.meta.diasLaborales}</p>
-                <p><span className="text-gray-600">Punto de equilibrio:</span> {formatearUSD(estado.meta.puntoEquilibrioCalculado)}</p>
-                <p><span className="text-gray-600">Meta mensual:</span> {formatearUSD(estado.meta.metaMensualCalculada)}</p>
-                <p><span className="text-gray-600">Meta diaria:</span> {formatearUSD(estado.meta.metaDiariaCalculada)}</p>
+                <form
+                  onSubmit={handleSaveGasto}
+                  className="p-5 space-y-3"
+                  style={{ background: TOKENS.bg }}
+                >
+                  <div>
+                    <label className="pm-label">Nombre</label>
+                    <input
+                      type="text"
+                      value={gastoForm.nombre}
+                      onChange={(e) =>
+                        setGastoForm({ ...gastoForm, nombre: e.target.value })
+                      }
+                      className="pm-input"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="pm-label">Monto (USD)</label>
+                    <input
+                      type="number"
+                      value={gastoForm.montoUSD}
+                      onChange={(e) =>
+                        setGastoForm({
+                          ...gastoForm,
+                          montoUSD: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      className="pm-input pm-tnum"
+                      step="0.01"
+                      min="0"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="pm-label">Categoría</label>
+                      <select
+                        value={gastoForm.categoria}
+                        onChange={(e) =>
+                          setGastoForm({
+                            ...gastoForm,
+                            categoria: e.target.value as 'fijo' | 'variable',
+                          })
+                        }
+                        className="pm-input"
+                      >
+                        <option value="fijo">Fijo</option>
+                        <option value="variable">Variable</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="pm-label">Frecuencia</label>
+                      <select
+                        value={gastoForm.frecuencia}
+                        onChange={(e) =>
+                          setGastoForm({
+                            ...gastoForm,
+                            frecuencia: e.target.value as 'mensual' | 'semanal' | 'diario',
+                          })
+                        }
+                        className="pm-input"
+                      >
+                        <option value="mensual">Mensual</option>
+                        <option value="semanal">Semanal</option>
+                        <option value="diario">Diario</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="pm-label">Notas (opcional)</label>
+                    <textarea
+                      value={gastoForm.notas}
+                      onChange={(e) =>
+                        setGastoForm({ ...gastoForm, notas: e.target.value })
+                      }
+                      className="pm-input"
+                      rows={2}
+                    />
+                  </div>
+                  <div
+                    className="flex gap-2 pt-3"
+                    style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+                  >
+                    <PMBtnSecondary
+                      type="button"
+                      onClick={() => setShowGastoForm(false)}
+                      className="flex-1"
+                    >
+                      Cancelar
+                    </PMBtnSecondary>
+                    <PMBtnPrimary type="submit" className="flex-1">
+                      {editingGasto ? 'Actualizar' : 'Guardar'}
+                    </PMBtnPrimary>
+                  </div>
+                </form>
               </div>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Modal Gasto */}
-      {showGastoForm && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowGastoForm(false)} />
-            <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-              <h3 className="text-lg font-semibold mb-4">
-                {editingGasto ? 'Editar Gasto' : 'Nuevo Gasto'}
-              </h3>
-              <form onSubmit={handleSaveGasto} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
-                  <input
-                    type="text"
-                    value={gastoForm.nombre}
-                    onChange={(e) => setGastoForm({ ...gastoForm, nombre: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Monto (USD)</label>
-                  <input
-                    type="number"
-                    value={gastoForm.montoUSD}
-                    onChange={(e) => setGastoForm({ ...gastoForm, montoUSD: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border rounded-md"
-                    step="0.01"
-                    min="0"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-                  <select
-                    value={gastoForm.categoria}
-                    onChange={(e) => setGastoForm({ ...gastoForm, categoria: e.target.value as 'fijo' | 'variable' })}
-                    className="w-full px-3 py-2 border rounded-md"
-                  >
-                    <option value="fijo">Fijo</option>
-                    <option value="variable">Variable</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Frecuencia</label>
-                  <select
-                    value={gastoForm.frecuencia}
-                    onChange={(e) => setGastoForm({ ...gastoForm, frecuencia: e.target.value as 'mensual' | 'semanal' | 'diario' })}
-                    className="w-full px-3 py-2 border rounded-md"
-                  >
-                    <option value="mensual">Mensual</option>
-                    <option value="semanal">Semanal</option>
-                    <option value="diario">Diario</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Notas (opcional)</label>
-                  <textarea
-                    value={gastoForm.notas}
-                    onChange={(e) => setGastoForm({ ...gastoForm, notas: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md"
-                    rows={2}
-                  />
-                </div>
-                <div className="flex gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowGastoForm(false)}
-                    className="flex-1 py-2 px-4 border border-gray-300 rounded-md hover:bg-gray-50"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    {editingGasto ? 'Actualizar' : 'Guardar'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+          </PMScope>
+        )}
+      </div>
     </div>
+  );
+}
+
+function Th({
+  children,
+  align = 'left',
+}: {
+  children: React.ReactNode;
+  align?: 'left' | 'right';
+}) {
+  return (
+    <th
+      className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.05em] select-none"
+      style={{
+        color: TOKENS.slate700,
+        borderBottom: `1px solid ${TOKENS.slate200}`,
+        textAlign: align,
+      }}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({
+  children,
+  align = 'left',
+}: {
+  children: React.ReactNode;
+  align?: 'left' | 'right';
+}) {
+  return (
+    <td
+      className="px-3 py-2.5 align-middle"
+      style={{ textAlign: align, color: TOKENS.charcoal }}
+    >
+      {children}
+    </td>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  icon,
+  hint,
+  footer,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  hint?: string;
+  footer?: React.ReactNode;
+}) {
+  return (
+    <div className="pm-card px-4 py-3">
+      <div className="pm-eyebrow flex items-center justify-between">
+        <span>{label}</span>
+        <span style={{ color: TOKENS.slate400 }}>{icon}</span>
+      </div>
+      <div
+        className="pm-tnum text-[24px] font-bold leading-8 tracking-[-0.02em] mt-1"
+        style={{ color: TOKENS.charcoal }}
+      >
+        {value}
+      </div>
+      {hint && (
+        <div className="text-[12px] mt-0.5" style={{ color: TOKENS.slate500 }}>
+          {hint}
+        </div>
+      )}
+      {footer && <div className="mt-2">{footer}</div>}
+    </div>
+  );
+}
+
+function MicroStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: 'success' | 'danger';
+}) {
+  const color =
+    tone === 'success' ? TOKENS.green : tone === 'danger' ? TOKENS.red : TOKENS.charcoal;
+  return (
+    <div>
+      <div className="pm-eyebrow">{label}</div>
+      <div
+        className="pm-tnum font-bold text-[15px] mt-0.5"
+        style={{ color }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function ConfRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between">
+      <span style={{ color: TOKENS.slate500 }}>{label}:</span>
+      <span className="pm-tnum font-semibold" style={{ color: TOKENS.charcoal }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function IconBtn({
+  children,
+  onClick,
+  title,
+  danger,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  title: string;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="inline-flex items-center justify-center h-7 w-7 rounded transition-colors"
+      style={{ color: danger ? TOKENS.red : TOKENS.slate500 }}
+      onMouseEnter={(e) =>
+        ((e.currentTarget as HTMLButtonElement).style.background = danger
+          ? TOKENS.redSoft
+          : TOKENS.slate100)
+      }
+      onMouseLeave={(e) =>
+        ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')
+      }
+    >
+      {children}
+    </button>
   );
 }

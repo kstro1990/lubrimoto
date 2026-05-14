@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { syncEvents, isOnline, bidirectionalSync, getSyncStats } from '../_lib/sync';
 import { useNotifications } from './NotificationProvider';
 import { RefreshCw, Cloud, CloudOff, Upload } from 'lucide-react';
+import { TOKENS, PMBtnPrimary } from './_pmTheme';
 
 export default function SyncStatusBar() {
   const [online, setOnline] = useState(isOnline());
@@ -34,7 +35,6 @@ export default function SyncStatusBar() {
     };
   }, []);
 
-  // Close popover on outside click — same pattern as ProductSearch.
   useEffect(() => {
     if (!open) return;
     const handleClickOutside = (event: MouseEvent) => {
@@ -61,9 +61,10 @@ export default function SyncStatusBar() {
     try {
       const result = await bidirectionalSync();
       if (result.success) {
-        const msg = result.uploaded === 0 && result.downloaded === 0
-          ? 'Todo está actualizado. No hay cambios pendientes.'
-          : `Sincronización completada: ${result.uploaded} subidos, ${result.downloaded} descargados`;
+        const msg =
+          result.uploaded === 0 && result.downloaded === 0
+            ? 'Todo está actualizado. No hay cambios pendientes.'
+            : `Sincronización completada: ${result.uploaded} subidos, ${result.downloaded} descargados`;
         success('Sincronización Exitosa', msg, 5000);
       } else {
         showError('Error de Sincronización', result.errors.join(', '), 8000);
@@ -84,6 +85,8 @@ export default function SyncStatusBar() {
     ? `${pendingCount} pendientes`
     : 'Sincronizado';
 
+  const iconColor = !online ? TOKENS.red : syncing ? TOKENS.charcoal : TOKENS.green;
+
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -92,19 +95,32 @@ export default function SyncStatusBar() {
         aria-label={`Sincronización: ${statusLabel}`}
         aria-expanded={open}
         title={statusLabel}
-        className="relative flex items-center justify-center w-10 h-10 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+        className="relative flex items-center justify-center w-10 h-10 rounded transition-colors"
+        style={{
+          background: '#fff',
+          border: `1px solid ${TOKENS.slate200}`,
+          color: iconColor,
+          boxShadow: '0 1px 2px rgba(18, 24, 38, 0.04)',
+        }}
+        onMouseEnter={(e) =>
+          ((e.currentTarget as HTMLButtonElement).style.background = TOKENS.slate100)
+        }
+        onMouseLeave={(e) =>
+          ((e.currentTarget as HTMLButtonElement).style.background = '#fff')
+        }
       >
         {syncing ? (
-          <RefreshCw className="w-5 h-5 animate-spin text-blue-600 dark:text-blue-400" />
+          <RefreshCw className="w-4 h-4 animate-spin" />
         ) : online ? (
-          <Cloud className="w-5 h-5 text-green-600 dark:text-green-400" />
+          <Cloud className="w-4 h-4" />
         ) : (
-          <CloudOff className="w-5 h-5 text-red-600 dark:text-red-400" />
+          <CloudOff className="w-4 h-4" />
         )}
         {pendingCount > 0 && !syncing && (
           <span
             aria-hidden="true"
-            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-semibold leading-none"
+            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold leading-none pm-tnum"
+            style={{ background: TOKENS.orange, color: '#fff' }}
           >
             {pendingCount > 99 ? '99+' : pendingCount}
           </span>
@@ -115,51 +131,76 @@ export default function SyncStatusBar() {
         <div
           role="dialog"
           aria-label="Detalles de sincronización"
-          className="absolute top-full right-0 mt-2 z-50 w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3"
+          className="absolute top-full right-0 mt-2 z-50 w-72 p-3 rounded pm-elevated"
+          style={{
+            background: '#fff',
+            border: `1px solid ${TOKENS.slate200}`,
+          }}
         >
-          <div className="flex items-center gap-2 mb-3">
-            {online ? (
-              <Cloud className="w-4 h-4 text-green-500" />
-            ) : (
-              <CloudOff className="w-4 h-4 text-red-500" />
-            )}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              {online ? (
+                <Cloud className="w-4 h-4" style={{ color: TOKENS.green }} />
+              ) : (
+                <CloudOff className="w-4 h-4" style={{ color: TOKENS.red }} />
+              )}
+              <span
+                className="text-[13px] font-semibold"
+                style={{ color: TOKENS.charcoal }}
+              >
+                {online ? 'En línea' : 'Sin conexión'}
+              </span>
+            </div>
             <span
-              className={`text-sm font-medium ${
-                online ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-              }`}
+              className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider"
+              style={{
+                background: online ? TOKENS.greenSoft : TOKENS.redSoft,
+                color: online ? TOKENS.green : TOKENS.red,
+              }}
             >
-              {online ? 'En línea' : 'Sin conexión'}
+              {online ? 'Online' : 'Offline'}
             </span>
           </div>
 
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mb-3 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400">Pendientes local:</span>
-              <span className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1">
-                <Upload className="w-3 h-3" /> {pendingCount} items
+          <div
+            className="pt-3 mb-3 space-y-2"
+            style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+          >
+            <div className="flex justify-between text-[13px]">
+              <span style={{ color: TOKENS.slate500 }}>Pendientes local:</span>
+              <span
+                className="font-bold pm-tnum flex items-center gap-1"
+                style={{ color: TOKENS.charcoal }}
+              >
+                <Upload className="w-3 h-3" /> {pendingCount}
               </span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400">Última sync:</span>
-              <span className="font-medium text-gray-900 dark:text-gray-100">
+            <div className="flex justify-between text-[13px]">
+              <span style={{ color: TOKENS.slate500 }}>Última sync:</span>
+              <span
+                className="font-semibold pm-tnum"
+                style={{ color: TOKENS.charcoal }}
+              >
                 {lastSync ? lastSync.toLocaleTimeString() : 'Nunca'}
               </span>
             </div>
           </div>
 
-          <button
+          <PMBtnPrimary
             onClick={handleSync}
             disabled={syncing || !online}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            title="Sincronizar datos locales con la nube (subir y descargar)"
+            className="w-full"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Sincronizando...' : pendingCount > 0 ? `Sync (${pendingCount})` : 'Sync'}
-          </button>
+            {syncing ? 'Sincronizando…' : pendingCount > 0 ? `Sync (${pendingCount})` : 'Sync'}
+          </PMBtnPrimary>
 
           {!online && (
-            <p className="text-xs text-red-500 mt-2 text-center">
-              Sin conexión. Los datos se sincronizarán automáticamente al reconectar.
+            <p
+              className="text-[11px] mt-2 text-center"
+              style={{ color: TOKENS.red }}
+            >
+              Sin conexión. Los datos se sincronizarán al reconectar.
             </p>
           )}
         </div>
