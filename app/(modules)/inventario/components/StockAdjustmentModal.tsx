@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { X, Plus, Minus, AlertCircle, Package, ArrowRight } from 'lucide-react';
 import { Product, db, recordInventoryMovement, MovementType, SyncStatus } from '@/app/_db/db';
 import { useNotifications } from '@/app/_components/NotificationProvider';
-import { PMScope, TOKENS, PMBtnPrimary, PMBtnSecondary } from '@/app/_components/_pmTheme';
+import { PMScope, T, PMBtnPrimary, PMBtnSecondary } from '@/app/_components/_pmTheme';
 
 interface StockAdjustmentModalProps {
   isOpen: boolean;
@@ -128,43 +128,43 @@ export default function StockAdjustmentModal({
       <div className="flex min-h-full items-center justify-center p-4">
         <div
           className="fixed inset-0 transition-opacity"
-          style={{ background: 'rgba(18, 24, 38, 0.55)' }}
+          style={{ background: T.backdrop }}
           onClick={onClose}
         />
 
         <div
           className="relative transform overflow-hidden rounded text-left transition-all w-full max-w-md"
           style={{
-            background: '#fff',
-            border: `1px solid ${TOKENS.slate200}`,
-            boxShadow: '0 20px 40px rgba(18, 24, 38, 0.18)',
+            background: T.surface,
+            border: `1px solid ${T.slate200}`,
+            boxShadow: `0 20px 40px ${T.shadowStrong}`,
           }}
         >
           {/* Header */}
           <div
             className="px-5 py-3 flex justify-between items-center"
             style={{
-              background: TOKENS.slate50,
-              borderBottom: `1px solid ${TOKENS.slate200}`,
+              background: T.slate50,
+              borderBottom: `1px solid ${T.slate200}`,
             }}
           >
             <div className="flex items-center gap-2.5">
               <div
                 className="flex items-center justify-center h-8 w-8 rounded"
-                style={{ background: TOKENS.charcoal, color: '#fff' }}
+                style={{ background: T.accentFill, color: T.onAccentFill }}
               >
                 <Package className="h-4 w-4" />
               </div>
               <div>
                 <div
                   className="text-[11px] font-bold uppercase tracking-[0.05em]"
-                  style={{ color: TOKENS.slate500 }}
+                  style={{ color: T.slate500 }}
                 >
                   Movimiento de stock
                 </div>
                 <h3
                   className="text-[16px] font-semibold leading-5"
-                  style={{ color: TOKENS.charcoal }}
+                  style={{ color: T.headline }}
                 >
                   Ajustar Stock
                 </h3>
@@ -173,9 +173,9 @@ export default function StockAdjustmentModal({
             <button
               onClick={onClose}
               className="inline-flex items-center justify-center h-8 w-8 rounded transition-colors"
-              style={{ color: TOKENS.slate500 }}
+              style={{ color: T.slate500 }}
               onMouseEnter={(e) =>
-                ((e.currentTarget as HTMLButtonElement).style.background = TOKENS.slate100)
+                ((e.currentTarget as HTMLButtonElement).style.background = T.slate100)
               }
               onMouseLeave={(e) =>
                 ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')
@@ -189,32 +189,32 @@ export default function StockAdjustmentModal({
           <form
             onSubmit={handleSubmit}
             className="p-5"
-            style={{ background: TOKENS.bg }}
+            style={{ background: T.bg }}
           >
             {/* Product summary */}
             <div
               className="mb-5 px-4 py-3 rounded flex items-center justify-between"
               style={{
-                background: '#fff',
-                border: `1px solid ${TOKENS.slate200}`,
+                background: T.surface,
+                border: `1px solid ${T.slate200}`,
               }}
             >
               <div className="min-w-0">
                 <div
                   className="text-[11px] font-bold uppercase tracking-[0.05em]"
-                  style={{ color: TOKENS.slate500 }}
+                  style={{ color: T.slate500 }}
                 >
                   Producto
                 </div>
                 <div
                   className="font-semibold text-[14px] truncate"
-                  style={{ color: TOKENS.charcoal }}
+                  style={{ color: T.charcoal }}
                 >
                   {product.name}
                 </div>
                 <div
                   className="font-mono text-[12px] mt-0.5"
-                  style={{ color: TOKENS.slate500 }}
+                  style={{ color: T.slate500 }}
                 >
                   {product.sku}
                 </div>
@@ -222,13 +222,13 @@ export default function StockAdjustmentModal({
               <div className="text-right pl-4">
                 <div
                   className="text-[11px] font-bold uppercase tracking-[0.05em]"
-                  style={{ color: TOKENS.slate500 }}
+                  style={{ color: T.slate500 }}
                 >
                   Stock actual
                 </div>
                 <div
                   className="pm-tnum font-bold text-[24px] leading-7"
-                  style={{ color: TOKENS.charcoal }}
+                  style={{ color: T.charcoal }}
                 >
                   {product.stockQuantity}
                 </div>
@@ -288,25 +288,25 @@ export default function StockAdjustmentModal({
               <div
                 className="mb-4 px-4 py-3 rounded flex items-center gap-3"
                 style={{
-                  background: '#fff',
-                  border: `1px solid ${TOKENS.slate200}`,
+                  background: T.surface,
+                  border: `1px solid ${T.slate200}`,
                 }}
               >
                 <div className="flex-1">
                   <div
                     className="text-[11px] font-bold uppercase tracking-[0.05em]"
-                    style={{ color: TOKENS.slate500 }}
+                    style={{ color: T.slate500 }}
                   >
                     Nuevo stock
                   </div>
                   <div
                     className="pm-tnum font-bold text-[20px] leading-7"
-                    style={{ color: overSubtract ? TOKENS.red : TOKENS.charcoal }}
+                    style={{ color: overSubtract ? T.red : T.charcoal }}
                   >
-                    <span style={{ color: TOKENS.slate400 }}>{product.stockQuantity}</span>
+                    <span style={{ color: T.slate400 }}>{product.stockQuantity}</span>
                     <ArrowRight
                       className="inline h-4 w-4 mx-2"
-                      style={{ color: TOKENS.slate400 }}
+                      style={{ color: T.slate400 }}
                     />
                     {getNewStockDisplay()}
                   </div>
@@ -314,7 +314,7 @@ export default function StockAdjustmentModal({
                 {overSubtract && (
                   <div
                     className="flex items-center gap-1 text-[12px]"
-                    style={{ color: TOKENS.red }}
+                    style={{ color: T.red }}
                   >
                     <AlertCircle className="h-4 w-4" />
                     Excede el stock disponible
@@ -341,7 +341,7 @@ export default function StockAdjustmentModal({
             {/* Actions */}
             <div
               className="flex justify-end gap-2 pt-3"
-              style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+              style={{ borderTop: `1px solid ${T.slate200}` }}
             >
               <PMBtnSecondary type="button" onClick={onClose}>
                 Cancelar
@@ -372,22 +372,22 @@ function AdjustmentButton({
   children: React.ReactNode;
 }) {
   const activeColor =
-    tone === 'add' ? TOKENS.green : tone === 'subtract' ? TOKENS.red : TOKENS.orange;
+    tone === 'add' ? T.green : tone === 'subtract' ? T.red : T.orange;
   const activeBg =
     tone === 'add'
-      ? TOKENS.greenSoft
+      ? T.greenSoft
       : tone === 'subtract'
-      ? TOKENS.redSoft
-      : TOKENS.orangeSoft;
+      ? T.redSoft
+      : T.orangeSoft;
   return (
     <button
       type="button"
       onClick={onClick}
       className="flex items-center justify-center gap-1.5 px-2 h-9 text-[13px] font-semibold rounded transition-colors"
       style={{
-        background: active ? activeBg : '#fff',
-        color: active ? activeColor : TOKENS.charcoal,
-        border: `1px solid ${active ? activeColor : TOKENS.slate300}`,
+        background: active ? activeBg : T.surface,
+        color: active ? activeColor : T.charcoal,
+        border: `1px solid ${active ? activeColor : T.slate300}`,
       }}
     >
       {children}

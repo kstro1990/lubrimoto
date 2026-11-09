@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, db, generateSKU, SyncStatus } from '@/app/_db/db';
 import { Package, DollarSign, Box, AlertCircle, Building2, Tag, MapPin, Barcode } from 'lucide-react';
-import { TOKENS, PMBtnPrimary, PMBtnSecondary } from '@/app/_components/_pmTheme';
+import { T, PMBtnPrimary, PMBtnSecondary } from '@/app/_components/_pmTheme';
 
 interface ProductFormProps {
   product: Product | null | undefined;
@@ -222,7 +222,7 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
       {/* Basic Information */}
       <section className="pm-section">
         <h3 className="pm-section-title">
-          <Package className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
+          <Package className="h-4 w-4" style={{ color: T.slate500 }} />
           Información Básica
         </h3>
 
@@ -230,7 +230,7 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
           {/* SKU */}
           <div>
             <label htmlFor="sku" className="pm-label">
-              SKU <span style={{ color: TOKENS.red }}>*</span>
+              SKU <span style={{ color: T.red }}>*</span>
             </label>
             <div className="flex">
               <input
@@ -257,9 +257,9 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
                   disabled={isGeneratingSKU}
                   className="inline-flex items-center px-3 text-[12px] font-semibold transition-colors"
                   style={{
-                    background: TOKENS.slate100,
-                    color: TOKENS.charcoal,
-                    border: `1px solid ${TOKENS.slate300}`,
+                    background: T.slate100,
+                    color: T.charcoal,
+                    border: `1px solid ${T.slate300}`,
                     borderTopRightRadius: '0.25rem',
                     borderBottomRightRadius: '0.25rem',
                   }}
@@ -300,7 +300,7 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
           {/* Name */}
           <div className="md:col-span-2">
             <label htmlFor="name" className="pm-label">
-              Nombre del Producto <span style={{ color: TOKENS.red }}>*</span>
+              Nombre del Producto <span style={{ color: T.red }}>*</span>
             </label>
             <input
               type="text"
@@ -354,7 +354,7 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
       {/* Pricing */}
       <section className="pm-section">
         <h3 className="pm-section-title">
-          <DollarSign className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
+          <DollarSign className="h-4 w-4" style={{ color: T.slate500 }} />
           Precios
         </h3>
 
@@ -378,7 +378,7 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
           {/* Price */}
           <div>
             <label htmlFor="priceUsd" className="pm-label">
-              Precio de Venta (USD) <span style={{ color: TOKENS.red }}>*</span>
+              Precio de Venta (USD) <span style={{ color: T.red }}>*</span>
             </label>
             <MoneyInput
               name="priceUsd"
@@ -400,35 +400,35 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
               <div
                 className="flex items-center gap-3 px-3 py-2 rounded"
                 style={{
-                  background: TOKENS.slate50,
-                  border: `1px solid ${TOKENS.slate200}`,
+                  background: T.slate50,
+                  border: `1px solid ${T.slate200}`,
                 }}
               >
                 <div>
                   <div
                     className="text-[11px] font-bold uppercase tracking-[0.05em]"
-                    style={{ color: TOKENS.slate500 }}
+                    style={{ color: T.slate500 }}
                   >
                     Margen
                   </div>
                   <div
                     className="pm-tnum font-bold text-[16px]"
-                    style={{ color: margin > 20 ? TOKENS.green : TOKENS.amber }}
+                    style={{ color: margin > 20 ? T.green : T.amber }}
                   >
                     {margin.toFixed(1)}%
                   </div>
                 </div>
-                <div className="h-8 w-px" style={{ background: TOKENS.slate200 }} />
+                <div className="h-8 w-px" style={{ background: T.slate200 }} />
                 <div>
                   <div
                     className="text-[11px] font-bold uppercase tracking-[0.05em]"
-                    style={{ color: TOKENS.slate500 }}
+                    style={{ color: T.slate500 }}
                   >
                     Ganancia
                   </div>
                   <div
                     className="pm-tnum font-bold text-[16px]"
-                    style={{ color: TOKENS.charcoal }}
+                    style={{ color: T.charcoal }}
                   >
                     ${(formData.priceUsd! - formData.costUsd!).toFixed(2)}
                   </div>
@@ -442,14 +442,14 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
       {/* Inventory */}
       <section className="pm-section">
         <h3 className="pm-section-title">
-          <Box className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
+          <Box className="h-4 w-4" style={{ color: T.slate500 }} />
           Inventario
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label htmlFor="stockQuantity" className="pm-label">
-              Stock Actual <span style={{ color: TOKENS.red }}>*</span>
+              Stock Actual <span style={{ color: T.red }}>*</span>
             </label>
             <input
               type="number"
@@ -508,7 +508,7 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
       {/* Supplier */}
       <section className="pm-section">
         <h3 className="pm-section-title">
-          <Building2 className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
+          <Building2 className="h-4 w-4" style={{ color: T.slate500 }} />
           Proveedor
         </h3>
 
@@ -531,7 +531,7 @@ export default function ProductForm({ product, onSubmit, onCancel, mode }: Produ
       {/* Actions */}
       <div
         className="flex justify-end gap-2 pt-3"
-        style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+        style={{ borderTop: `1px solid ${T.slate200}` }}
       >
         <PMBtnSecondary type="button" onClick={onCancel}>
           Cancelar
@@ -565,7 +565,7 @@ function MoneyInput({
     <div className="relative">
       <span
         className="absolute inset-y-0 left-0 pl-2.5 flex items-center text-[13px] pointer-events-none"
-        style={{ color: TOKENS.slate500 }}
+        style={{ color: T.slate500 }}
       >
         $
       </span>
@@ -585,7 +585,7 @@ function MoneyInput({
       />
       <span
         className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-[11px] font-bold uppercase tracking-wider pointer-events-none"
-        style={{ color: TOKENS.slate400 }}
+        style={{ color: T.slate400 }}
       >
         USD
       </span>

@@ -29,6 +29,48 @@
     --pm-amber: #b45309;
     --pm-amber-soft: #fef3c7;
 
+    /* Themable PM tokens. These are the values consumed via inline
+       styles in pages that need to respond to dark mode. Defaults are
+       the light palette. The .dark .pm-dark-area scope below overrides
+       them with the Stitch dark palette so that only opted-in subtrees
+       flip when the user toggles dark mode. */
+    --pm-t-bg: #f8fafc;
+    --pm-t-surface: #ffffff;
+    --pm-t-charcoal: #121826;
+    --pm-t-slate700: #334155;
+    --pm-t-slate500: #475569;
+    --pm-t-slate400: #64748b;
+    --pm-t-slate300: #cbd5e1;
+    --pm-t-slate200: #e2e8f0;
+    --pm-t-slate100: #f1f5f9;
+    --pm-t-slate50: #f8fafc;
+    --pm-t-orange: #ff5f00;
+    --pm-t-orange-dark: #e55400;
+    --pm-t-orange-soft: #ffe8dc;
+    --pm-t-red: #ba1a1a;
+    --pm-t-red-soft: #ffdad6;
+    --pm-t-green: #0f766e;
+    --pm-t-green-soft: #ccfbf1;
+    --pm-t-amber: #b45309;
+    --pm-t-amber-soft: #fef3c7;
+    /* RGBA overlay (modal backdrop). Light = charcoal at 55% */
+    --pm-t-backdrop: rgba(18, 24, 38, 0.55);
+    /* RGBA shadow tint (industrial elevation) */
+    --pm-t-shadow-strong: rgba(18, 24, 38, 0.18);
+    --pm-t-shadow-soft: rgba(18, 24, 38, 0.04);
+    --pm-t-shadow-row: rgba(18, 24, 38, 0.025);
+    /* High-contrast filled accent (icon boxes, primary action chips).
+       Light: charcoal. Dark: racing orange. White stays white in both. */
+    --pm-t-accent-fill: #121826;
+    --pm-t-on-accent-fill: #ffffff;
+    /* Headline / brand text color (h1/h2/section titles). Light: charcoal.
+       Dark: peach (#ffb599) per Stitch primary-on-dark. */
+    --pm-t-headline: #121826;
+    /* Material-3 style warm-tone borders for the dark Stitch palette.
+       In light these stay the cool slate values; in dark they shift. */
+    --pm-t-border: #e2e8f0;
+    --pm-t-border-strong: #cbd5e1;
+
     /* shadcn variables retargeted to PM palette */
     --background: 210 40% 98%;
     --foreground: 222 33% 12%;
@@ -49,6 +91,64 @@
     --ring: 22 100% 50%;
     --radius: 0.25rem;
   }
+
+  /* Stitch "Precision Moto ERP — Dark" palette, scoped to subtrees that
+     opt in via .pm-dark-area. Roots palette derived from:
+       background  #0b1326   surface-container   #171f33
+       on-surface  #dae2fd   on-secondary-cont   #a7b6cc
+       primary-cont #f66018  error               #ffb4ab
+       tertiary    #4edea3   surface-variant     #2d3449 (borders) */
+  .dark .pm-dark-area {
+    /* surface-container-lowest — drops the page bg a notch below the
+       card surface so cards visibly elevate (matches Stitch reference
+       where bg/surface contrast is amplified by the sidebar tier). */
+    --pm-t-bg: #060e20;
+    --pm-t-surface: #171f33;
+    /* Body text bumped one luminance step above Stitch's #dae2fd so it
+       reads snappier on the deeper navy bg without abandoning the
+       cool-slate hue family. */
+    --pm-t-charcoal: #eaf0ff;
+    /* on-surface (Stitch primary body text), bumped to match charcoal */
+    --pm-t-slate700: #eaf0ff;
+    /* on-surface-variant (Stitch muted label/hint, warm salmon) */
+    --pm-t-slate500: #e2bfb2;
+    --pm-t-slate400: #a98a7e;
+    /* Warm-tone outlines per Stitch Material-3 dark palette. */
+    --pm-t-slate300: #a98a7e;
+    --pm-t-slate200: #5a4138;
+    --pm-t-slate100: #222a3d;
+    --pm-t-slate50: #131b2e;
+    --pm-t-orange: #f66018;
+    --pm-t-orange-dark: #ff7b3a;
+    --pm-t-orange-soft: rgba(255, 95, 0, 0.18);
+    --pm-t-red: #ffb4ab;
+    --pm-t-red-soft: rgba(255, 180, 171, 0.18);
+    --pm-t-green: #4edea3;
+    --pm-t-green-soft: rgba(78, 222, 163, 0.18);
+    --pm-t-amber: #ffd591;
+    --pm-t-amber-soft: rgba(255, 213, 145, 0.18);
+    --pm-t-backdrop: rgba(0, 0, 0, 0.7);
+    --pm-t-shadow-strong: rgba(0, 0, 0, 0.5);
+    --pm-t-shadow-soft: rgba(0, 0, 0, 0.25);
+    --pm-t-shadow-row: rgba(255, 255, 255, 0.05);
+    --pm-t-accent-fill: #f66018;
+    --pm-t-on-accent-fill: #ffffff;
+    --pm-t-headline: #ffb599;
+    --pm-t-border: #5a4138;
+    --pm-t-border-strong: #a98a7e;
+  }
+
+  /* In Stitch dark, cards use rounded-xl (8px) instead of the 4px used
+     in our light system, and inner chips/badges adopt fully rounded
+     pills. Bump radii for any element marked with the standard Tailwind
+     `rounded` class inside the dark-area subtree. */
+  .dark .pm-dark-area .pm-card,
+  .dark .pm-dark-area section.rounded,
+  .dark .pm-dark-area div.rounded {
+    border-radius: 0.5rem;
+  }
+  /* Status badges keep their compact radius; the rules above already
+     skip span elements. */
 
   .dark {
     --background: 222 33% 8%;
@@ -106,13 +206,13 @@ input.pm-input,
 select.pm-input,
 textarea.pm-input {
   width: 100%;
-  border: 1px solid var(--pm-slate-300);
+  border: 1px solid var(--pm-t-slate300);
   border-radius: 0.25rem;
-  background: #fff;
+  background: var(--pm-t-surface);
   padding: 0.5rem 0.625rem;
   font-size: 13px;
   line-height: 18px;
-  color: var(--pm-charcoal);
+  color: var(--pm-t-charcoal);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 .pm-input:focus,
@@ -120,19 +220,19 @@ textarea.pm-input {
 input.pm-input:focus,
 select.pm-input:focus,
 textarea.pm-input:focus {
-  border-color: var(--pm-orange);
+  border-color: var(--pm-t-orange);
   box-shadow: 0 0 0 3px rgba(255, 95, 0, 0.15);
   outline: none;
 }
 .pm-input::placeholder {
-  color: var(--pm-slate-400);
+  color: var(--pm-t-slate400);
 }
 .pm-input:disabled {
-  background: var(--pm-slate-100);
-  color: var(--pm-slate-500);
+  background: var(--pm-t-slate100);
+  color: var(--pm-t-slate500);
 }
 .pm-input-error {
-  border-color: var(--pm-red) !important;
+  border-color: var(--pm-t-red) !important;
 }
 
 .pm-label {
@@ -141,22 +241,22 @@ textarea.pm-input:focus {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--pm-slate-500);
+  color: var(--pm-t-slate500);
   margin-bottom: 0.375rem;
 }
 .pm-hint {
   font-size: 12px;
-  color: var(--pm-slate-500);
+  color: var(--pm-t-slate500);
   margin-top: 0.25rem;
 }
 .pm-error {
   font-size: 12px;
-  color: var(--pm-red);
+  color: var(--pm-t-red);
   margin-top: 0.25rem;
 }
 .pm-section {
-  background: #fff;
-  border: 1px solid var(--pm-slate-200);
+  background: var(--pm-t-surface);
+  border: 1px solid var(--pm-t-slate200);
   border-radius: 0.25rem;
   padding: 1rem;
 }
@@ -168,23 +268,23 @@ textarea.pm-input:focus {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--pm-slate-700);
+  color: var(--pm-t-slate700);
   margin-bottom: 0.875rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--pm-slate-200);
+  border-bottom: 1px solid var(--pm-t-slate200);
 }
 
 /* Card surface convenience */
 .pm-card {
-  background: #fff;
-  border: 1px solid var(--pm-slate-200);
+  background: var(--pm-t-surface);
+  border: 1px solid var(--pm-t-slate200);
   border-radius: 0.25rem;
-  box-shadow: 0 1px 2px rgba(18, 24, 38, 0.04);
+  box-shadow: 0 1px 2px var(--pm-t-shadow-soft);
 }
 
 /* Industrial elevation for popovers / modals */
 .pm-elevated {
-  box-shadow: 0 20px 40px rgba(18, 24, 38, 0.18);
+  box-shadow: 0 20px 40px var(--pm-t-shadow-strong);
 }
 
 /* Eyebrow label (small label-caps used above titles) */
@@ -193,7 +293,7 @@ textarea.pm-input:focus {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--pm-slate-500);
+  color: var(--pm-t-slate500);
 }
 
 /* Tabular numbers everywhere for class="pm-table" tbody tds */
@@ -202,7 +302,7 @@ textarea.pm-input:focus {
   font-size: 13px;
 }
 .pm-table thead tr {
-  background: var(--pm-slate-100);
+  background: var(--pm-t-slate100);
 }
 .pm-table th {
   padding: 0.5rem 0.75rem;
@@ -210,14 +310,14 @@ textarea.pm-input:focus {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--pm-slate-700);
-  border-bottom: 1px solid var(--pm-slate-200);
+  color: var(--pm-t-slate700);
+  border-bottom: 1px solid var(--pm-t-slate200);
   text-align: left;
 }
 .pm-table tbody tr {
-  border-top: 1px solid var(--pm-slate-200);
+  border-top: 1px solid var(--pm-t-slate200);
 }
 .pm-table td {
   padding: 0.625rem 0.75rem;
-  color: var(--pm-charcoal);
+  color: var(--pm-t-charcoal);
 }

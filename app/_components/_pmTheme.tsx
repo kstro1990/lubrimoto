@@ -34,6 +34,64 @@ export const PM_FONT =
   "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
 /**
+ * Themable variant of TOKENS. Each property resolves to a CSS custom
+ * property (`--pm-t-*`) instead of a literal hex string, so any inline
+ * style that uses it will respond to dark mode when the surrounding
+ * subtree opts in via `.pm-dark-area` (see globals.css).
+ *
+ * Use this in pages/components that should flip when the user toggles
+ * theme. For places that need a static color (e.g. Recharts fill values
+ * computed once), keep using TOKENS.
+ */
+export const T = {
+  bg: 'var(--pm-t-bg)',
+  surface: 'var(--pm-t-surface)',
+  charcoal: 'var(--pm-t-charcoal)',
+  slate700: 'var(--pm-t-slate700)',
+  slate500: 'var(--pm-t-slate500)',
+  slate400: 'var(--pm-t-slate400)',
+  slate300: 'var(--pm-t-slate300)',
+  slate200: 'var(--pm-t-slate200)',
+  slate100: 'var(--pm-t-slate100)',
+  slate50: 'var(--pm-t-slate50)',
+  orange: 'var(--pm-t-orange)',
+  orangeDark: 'var(--pm-t-orange-dark)',
+  orangeSoft: 'var(--pm-t-orange-soft)',
+  red: 'var(--pm-t-red)',
+  redSoft: 'var(--pm-t-red-soft)',
+  green: 'var(--pm-t-green)',
+  greenSoft: 'var(--pm-t-green-soft)',
+  amber: 'var(--pm-t-amber)',
+  amberSoft: 'var(--pm-t-amber-soft)',
+  backdrop: 'var(--pm-t-backdrop)',
+  shadowStrong: 'var(--pm-t-shadow-strong)',
+  shadowSoft: 'var(--pm-t-shadow-soft)',
+  shadowRow: 'var(--pm-t-shadow-row)',
+  accentFill: 'var(--pm-t-accent-fill)',
+  onAccentFill: 'var(--pm-t-on-accent-fill)',
+  headline: 'var(--pm-t-headline)',
+  border: 'var(--pm-t-border)',
+  borderStrong: 'var(--pm-t-border-strong)',
+} as const;
+
+/** Opt-in wrapper enabling dark-mode tokens inside its subtree. */
+export function PMDarkArea({
+  children,
+  className = '',
+  style,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div className={`pm-dark-area ${className}`} style={style}>
+      {children}
+    </div>
+  );
+}
+
+/**
  * Thin compatibility wrapper. The PM styling is applied app-wide via
  * `<body class="pm-scope">` and `globals.css`. This wrapper still renders
  * a div with the same class so legacy callers keep working.
@@ -54,6 +112,10 @@ export function PMScope({
   );
 }
 
+/**
+ * Primary CTA. Uses themable orange so it picks up the slightly tweaked
+ * dark-mode hue (#f66018) when rendered inside a .pm-dark-area subtree.
+ */
 export function PMBtnPrimary({
   children,
   ...props
@@ -65,18 +127,18 @@ export function PMBtnPrimary({
         props.className ?? ''
       }`}
       style={{
-        background: TOKENS.orange,
+        background: T.orange,
         color: '#fff',
-        boxShadow: '0 1px 2px rgba(18, 24, 38, 0.08)',
+        boxShadow: `0 1px 2px ${T.shadowSoft}`,
         ...(props.style ?? {}),
       }}
       onMouseEnter={(e) => {
         if (!props.disabled)
-          (e.currentTarget as HTMLButtonElement).style.background = TOKENS.orangeDark;
+          (e.currentTarget as HTMLButtonElement).style.background = T.orangeDark;
       }}
       onMouseLeave={(e) => {
         if (!props.disabled)
-          (e.currentTarget as HTMLButtonElement).style.background = TOKENS.orange;
+          (e.currentTarget as HTMLButtonElement).style.background = T.orange;
       }}
     >
       {children}
@@ -84,6 +146,10 @@ export function PMBtnPrimary({
   );
 }
 
+/**
+ * Secondary action button: surface bg + outline. Themable so it inverts
+ * inside .pm-dark-area to a dark surface chip with the warm outline.
+ */
 export function PMBtnSecondary({
   children,
   ...props
@@ -95,16 +161,16 @@ export function PMBtnSecondary({
         props.className ?? ''
       }`}
       style={{
-        color: TOKENS.charcoal,
-        background: TOKENS.surface,
-        border: `1px solid ${TOKENS.slate300}`,
+        color: T.charcoal,
+        background: T.surface,
+        border: `1px solid ${T.slate300}`,
         ...(props.style ?? {}),
       }}
       onMouseEnter={(e) =>
-        ((e.currentTarget as HTMLButtonElement).style.background = TOKENS.slate100)
+        ((e.currentTarget as HTMLButtonElement).style.background = T.slate100)
       }
       onMouseLeave={(e) =>
-        ((e.currentTarget as HTMLButtonElement).style.background = TOKENS.surface)
+        ((e.currentTarget as HTMLButtonElement).style.background = T.surface)
       }
     >
       {children}

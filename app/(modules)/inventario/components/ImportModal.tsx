@@ -11,7 +11,7 @@ import {
   MovementType,
 } from '@/app/_db/db';
 import { useNotifications } from '@/app/_components/NotificationProvider';
-import { PMScope, TOKENS, PMBtnPrimary, PMBtnSecondary } from '@/app/_components/_pmTheme';
+import { PMScope, T, PMBtnPrimary, PMBtnSecondary } from '@/app/_components/_pmTheme';
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -218,43 +218,43 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
       <div className="flex min-h-full items-center justify-center p-4">
         <div
           className="fixed inset-0"
-          style={{ background: 'rgba(18, 24, 38, 0.55)' }}
+          style={{ background: T.backdrop }}
           onClick={handleClose}
         />
 
         <div
           className="relative transform overflow-hidden rounded text-left transition-all w-full max-w-4xl max-h-[90vh] overflow-y-auto"
           style={{
-            background: '#fff',
-            border: `1px solid ${TOKENS.slate200}`,
-            boxShadow: '0 20px 40px rgba(18, 24, 38, 0.18)',
+            background: T.surface,
+            border: `1px solid ${T.slate200}`,
+            boxShadow: `0 20px 40px ${T.shadowStrong}`,
           }}
         >
           {/* Header */}
           <div
             className="px-5 py-3 flex justify-between items-center sticky top-0 z-10"
             style={{
-              background: TOKENS.slate50,
-              borderBottom: `1px solid ${TOKENS.slate200}`,
+              background: T.slate50,
+              borderBottom: `1px solid ${T.slate200}`,
             }}
           >
             <div className="flex items-center gap-2.5">
               <div
                 className="flex items-center justify-center h-8 w-8 rounded"
-                style={{ background: TOKENS.charcoal, color: '#fff' }}
+                style={{ background: T.accentFill, color: T.onAccentFill }}
               >
                 <Upload className="h-4 w-4" />
               </div>
               <div>
                 <div
                   className="text-[11px] font-bold uppercase tracking-[0.05em]"
-                  style={{ color: TOKENS.slate500 }}
+                  style={{ color: T.slate500 }}
                 >
                   Importación por lotes
                 </div>
                 <h3
                   className="text-[16px] font-semibold leading-5"
-                  style={{ color: TOKENS.charcoal }}
+                  style={{ color: T.headline }}
                 >
                   Importar Productos desde CSV
                 </h3>
@@ -263,9 +263,9 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
             <button
               onClick={handleClose}
               className="inline-flex items-center justify-center h-8 w-8 rounded transition-colors"
-              style={{ color: TOKENS.slate500 }}
+              style={{ color: T.slate500 }}
               onMouseEnter={(e) =>
-                ((e.currentTarget as HTMLButtonElement).style.background = TOKENS.slate100)
+                ((e.currentTarget as HTMLButtonElement).style.background = T.slate100)
               }
               onMouseLeave={(e) =>
                 ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')
@@ -278,43 +278,43 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
           {/* Stepper */}
           <Stepper step={step} />
 
-          <div className="p-6" style={{ background: TOKENS.bg }}>
+          <div className="p-6" style={{ background: T.bg }}>
             {step === 'upload' && (
               <div className="space-y-4">
                 {/* Template Download */}
                 <div
                   className="px-4 py-3 rounded flex items-start gap-3"
                   style={{
-                    background: '#fff',
-                    border: `1px solid ${TOKENS.slate200}`,
+                    background: T.surface,
+                    border: `1px solid ${T.slate200}`,
                   }}
                 >
                   <div
                     className="flex items-center justify-center h-9 w-9 rounded shrink-0"
-                    style={{ background: TOKENS.slate100 }}
+                    style={{ background: T.slate100 }}
                   >
-                    <Download className="h-4 w-4" style={{ color: TOKENS.charcoal }} />
+                    <Download className="h-4 w-4" style={{ color: T.charcoal }} />
                   </div>
                   <div className="flex-1">
                     <div
                       className="text-[11px] font-bold uppercase tracking-[0.05em]"
-                      style={{ color: TOKENS.slate500 }}
+                      style={{ color: T.slate500 }}
                     >
                       Paso 1 · Plantilla
                     </div>
                     <h4
                       className="text-[14px] font-semibold"
-                      style={{ color: TOKENS.charcoal }}
+                      style={{ color: T.charcoal }}
                     >
                       Descargar plantilla CSV
                     </h4>
-                    <p className="text-[13px] mt-0.5" style={{ color: TOKENS.slate500 }}>
+                    <p className="text-[13px] mt-0.5" style={{ color: T.slate500 }}>
                       Usa la plantilla con el orden correcto de columnas.
                     </p>
                     <button
                       onClick={downloadTemplate}
                       className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold"
-                      style={{ color: TOKENS.orange }}
+                      style={{ color: T.orange }}
                     >
                       <Download className="h-3.5 w-3.5" />
                       Descargar plantilla.csv
@@ -326,28 +326,28 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
                 <div
                   className="px-4 py-3 rounded"
                   style={{
-                    background: '#fff',
-                    border: `1px solid ${TOKENS.slate200}`,
+                    background: T.surface,
+                    border: `1px solid ${T.slate200}`,
                   }}
                 >
                   <div
                     className="text-[11px] font-bold uppercase tracking-[0.05em] mb-2"
-                    style={{ color: TOKENS.slate500 }}
+                    style={{ color: T.slate500 }}
                   >
                     Formato requerido
                   </div>
                   <div
                     className="font-mono text-[12px] p-3 rounded"
                     style={{
-                      background: TOKENS.slate50,
-                      border: `1px solid ${TOKENS.slate200}`,
-                      color: TOKENS.charcoal,
+                      background: T.slate50,
+                      border: `1px solid ${T.slate200}`,
+                      color: T.charcoal,
                     }}
                   >
                     nombre, descripcion, costo_usd, precio_usd, stock, stock_minimo, proveedor,
                     categoria, codigo_barras, ubicacion
                   </div>
-                  <p className="text-[12px] mt-2" style={{ color: TOKENS.slate500 }}>
+                  <p className="text-[12px] mt-2" style={{ color: T.slate500 }}>
                     * Solo <strong>nombre</strong> y <strong>precio_usd</strong> son obligatorios.
                     El SKU se generará automáticamente.
                   </p>
@@ -357,15 +357,15 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
                 <div
                   className="rounded p-10 text-center transition-colors"
                   style={{
-                    background: '#fff',
-                    border: `2px dashed ${TOKENS.slate300}`,
+                    background: T.surface,
+                    border: `2px dashed ${T.slate300}`,
                   }}
                   onDragOver={(e) => {
                     e.preventDefault();
-                    (e.currentTarget as HTMLDivElement).style.borderColor = TOKENS.orange;
+                    (e.currentTarget as HTMLDivElement).style.borderColor = T.orange;
                   }}
                   onDragLeave={(e) => {
-                    (e.currentTarget as HTMLDivElement).style.borderColor = TOKENS.slate300;
+                    (e.currentTarget as HTMLDivElement).style.borderColor = T.slate300;
                   }}
                 >
                   <input
@@ -380,20 +380,20 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
                   <label htmlFor="csv-upload" className="cursor-pointer block">
                     <div
                       className="inline-flex items-center justify-center h-14 w-14 rounded mb-3"
-                      style={{ background: TOKENS.slate100 }}
+                      style={{ background: T.slate100 }}
                     >
                       <FileSpreadsheet
                         className="h-7 w-7"
-                        style={{ color: TOKENS.charcoal }}
+                        style={{ color: T.charcoal }}
                       />
                     </div>
                     <p
                       className="text-[16px] font-semibold"
-                      style={{ color: TOKENS.charcoal }}
+                      style={{ color: T.charcoal }}
                     >
                       Arrastra un archivo CSV o haz clic para seleccionar
                     </p>
-                    <p className="text-[13px] mt-1" style={{ color: TOKENS.slate500 }}>
+                    <p className="text-[13px] mt-1" style={{ color: T.slate500 }}>
                       Solo archivos .csv · máximo 1000 productos
                     </p>
                   </label>
@@ -428,7 +428,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
                       setFile(null);
                     }}
                     className="text-[13px] font-semibold"
-                    style={{ color: TOKENS.orange }}
+                    style={{ color: T.orange }}
                   >
                     Subir otro archivo
                   </button>
@@ -437,11 +437,11 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
                 {/* Preview Table */}
                 <div
                   className="max-h-96 overflow-y-auto rounded"
-                  style={{ border: `1px solid ${TOKENS.slate200}`, background: '#fff' }}
+                  style={{ border: `1px solid ${T.slate200}`, background: T.surface }}
                 >
                   <table className="min-w-full text-[13px]">
                     <thead className="sticky top-0 z-10">
-                      <tr style={{ background: TOKENS.slate100 }}>
+                      <tr style={{ background: T.slate100 }}>
                         <ImpTh>Fila</ImpTh>
                         <ImpTh>Nombre</ImpTh>
                         <ImpTh align="right">Precio</ImpTh>
@@ -454,28 +454,28 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
                         <tr
                           key={idx}
                           style={{
-                            borderTop: `1px solid ${TOKENS.slate200}`,
-                            background: !row.isValid ? TOKENS.redSoft : undefined,
+                            borderTop: `1px solid ${T.slate200}`,
+                            background: !row.isValid ? T.redSoft : undefined,
                           }}
                         >
                           <td
                             className="px-3 py-2 pm-tnum"
-                            style={{ color: TOKENS.slate500 }}
+                            style={{ color: T.slate500 }}
                           >
                             {row.row}
                           </td>
-                          <td className="px-3 py-2" style={{ color: TOKENS.charcoal }}>
+                          <td className="px-3 py-2" style={{ color: T.charcoal }}>
                             {row.data.name || '—'}
                           </td>
                           <td
                             className="px-3 py-2 pm-tnum text-right"
-                            style={{ color: TOKENS.charcoal }}
+                            style={{ color: T.charcoal }}
                           >
                             ${row.data.priceUsd}
                           </td>
                           <td
                             className="px-3 py-2 pm-tnum text-right"
-                            style={{ color: TOKENS.charcoal }}
+                            style={{ color: T.charcoal }}
                           >
                             {row.data.stockQuantity}
                           </td>
@@ -484,15 +484,15 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
                               <span
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider"
                                 style={{
-                                  background: TOKENS.greenSoft,
-                                  color: TOKENS.green,
+                                  background: T.greenSoft,
+                                  color: T.green,
                                 }}
                               >
                                 <CheckCircle className="h-3 w-3" />
                                 Válido
                               </span>
                             ) : (
-                              <div className="text-[12px]" style={{ color: TOKENS.red }}>
+                              <div className="text-[12px]" style={{ color: T.red }}>
                                 {row.errors.map((err, i) => (
                                   <div key={i}>• {err}</div>
                                 ))}
@@ -508,7 +508,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
                 {/* Actions */}
                 <div
                   className="flex justify-end gap-2 pt-3"
-                  style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+                  style={{ borderTop: `1px solid ${T.slate200}` }}
                 >
                   <PMBtnSecondary onClick={() => setStep('upload')}>Volver</PMBtnSecondary>
                   <PMBtnPrimary
@@ -528,17 +528,17 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
                 <div
                   className="animate-spin rounded-full h-10 w-10 mx-auto mb-4"
                   style={{
-                    border: `3px solid ${TOKENS.slate200}`,
-                    borderTopColor: TOKENS.orange,
+                    border: `3px solid ${T.slate200}`,
+                    borderTopColor: T.orange,
                   }}
                 />
                 <p
                   className="text-[16px] font-semibold"
-                  style={{ color: TOKENS.charcoal }}
+                  style={{ color: T.charcoal }}
                 >
                   Importando productos…
                 </p>
-                <p className="text-[13px] mt-1" style={{ color: TOKENS.slate500 }}>
+                <p className="text-[13px] mt-1" style={{ color: T.slate500 }}>
                   Por favor no cierres esta ventana
                 </p>
               </div>
@@ -561,8 +561,8 @@ function Stepper({ step }: { step: 'upload' | 'preview' | 'importing' }) {
     <div
       className="px-5 py-2.5 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.05em]"
       style={{
-        background: '#fff',
-        borderBottom: `1px solid ${TOKENS.slate200}`,
+        background: T.surface,
+        borderBottom: `1px solid ${T.slate200}`,
       }}
     >
       {steps.map((s, i) => {
@@ -574,15 +574,15 @@ function Stepper({ step }: { step: 'upload' | 'preview' | 'importing' }) {
               <span
                 className="inline-flex items-center justify-center h-5 w-5 rounded-full"
                 style={{
-                  background: isActive || isDone ? TOKENS.orange : TOKENS.slate200,
-                  color: isActive || isDone ? '#fff' : TOKENS.slate500,
+                  background: isActive || isDone ? T.orange : T.slate200,
+                  color: isActive || isDone ? '#fff' : T.slate500,
                 }}
               >
                 {i + 1}
               </span>
               <span
                 style={{
-                  color: isActive ? TOKENS.charcoal : TOKENS.slate500,
+                  color: isActive ? T.charcoal : T.slate500,
                 }}
               >
                 {s.label}
@@ -591,7 +591,7 @@ function Stepper({ step }: { step: 'upload' | 'preview' | 'importing' }) {
             {i < steps.length - 1 && (
               <div
                 className="flex-1 h-px"
-                style={{ background: TOKENS.slate200 }}
+                style={{ background: T.slate200 }}
               />
             )}
           </React.Fragment>
@@ -612,8 +612,8 @@ function ImpTh({
     <th
       className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.05em]"
       style={{
-        color: TOKENS.slate700,
-        borderBottom: `1px solid ${TOKENS.slate200}`,
+        color: T.slate700,
+        borderBottom: `1px solid ${T.slate200}`,
         textAlign: align,
       }}
     >
@@ -633,8 +633,8 @@ function Stat({
   value: number;
   tone: 'success' | 'danger';
 }) {
-  const color = tone === 'success' ? TOKENS.green : TOKENS.red;
-  const bg = tone === 'success' ? TOKENS.greenSoft : TOKENS.redSoft;
+  const color = tone === 'success' ? T.green : T.red;
+  const bg = tone === 'success' ? T.greenSoft : T.redSoft;
   return (
     <div
       className="inline-flex items-center gap-2 px-3 py-1.5 rounded"

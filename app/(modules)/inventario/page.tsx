@@ -20,7 +20,7 @@ import {
   MoreVertical,
   MinusCircle,
 } from 'lucide-react';
-import { TOKENS, PM_FONT } from '@/app/_components/_pmTheme';
+import { T, PM_FONT } from '@/app/_components/_pmTheme';
 
 export default function InventarioPage() {
   const { success, error: showError } = useNotifications();
@@ -43,7 +43,7 @@ export default function InventarioPage() {
         return (
           <span
             className={base}
-            style={{ background: TOKENS.greenSoft, color: TOKENS.green }}
+            style={{ background: T.greenSoft, color: T.green }}
           >
             Sincronizado
           </span>
@@ -52,7 +52,7 @@ export default function InventarioPage() {
         return (
           <span
             className={base}
-            style={{ background: TOKENS.amberSoft, color: TOKENS.amber }}
+            style={{ background: T.amberSoft, color: T.amber }}
           >
             Pendiente
           </span>
@@ -61,11 +61,11 @@ export default function InventarioPage() {
         return (
           <span
             className={base}
-            style={{ background: TOKENS.slate100, color: TOKENS.charcoal }}
+            style={{ background: T.slate100, color: T.charcoal }}
           >
             <span
               className="inline-block w-2 h-2 rounded-full animate-pulse"
-              style={{ background: TOKENS.charcoal }}
+              style={{ background: T.charcoal }}
             />
             Sincronizando
           </span>
@@ -74,7 +74,7 @@ export default function InventarioPage() {
         return (
           <span
             className={base}
-            style={{ background: TOKENS.redSoft, color: TOKENS.orange }}
+            style={{ background: T.redSoft, color: T.orange }}
           >
             Error
           </span>
@@ -83,7 +83,7 @@ export default function InventarioPage() {
         return (
           <span
             className={base}
-            style={{ background: TOKENS.slate100, color: TOKENS.slate500 }}
+            style={{ background: T.slate100, color: T.slate500 }}
           >
             -
           </span>
@@ -235,37 +235,13 @@ export default function InventarioPage() {
 
   return (
     <div
-      className="precision-moto-scope pm-scope min-h-screen"
+      className="pm-scope pm-dark-area min-h-screen"
       style={{
-        background: TOKENS.bg,
-        color: TOKENS.charcoal,
+        background: T.bg,
+        color: T.charcoal,
         fontFamily: PM_FONT,
       }}
     >
-      <style jsx global>{`
-        .precision-moto-scope {
-          font-feature-settings: 'tnum' 1, 'cv11' 1;
-        }
-        .precision-moto-scope .pm-tnum {
-          font-variant-numeric: tabular-nums;
-        }
-        .precision-moto-scope table tr:nth-child(even) td {
-          background: #fbfcfd;
-        }
-        .precision-moto-scope .pm-input {
-          border: 1px solid ${TOKENS.slate300};
-          border-radius: 0.25rem;
-          background: #fff;
-          transition: border-color 120ms ease, box-shadow 120ms ease;
-        }
-        .precision-moto-scope .pm-input:focus,
-        .precision-moto-scope .pm-input:focus-within {
-          border-color: ${TOKENS.orange};
-          box-shadow: 0 0 0 3px rgba(255, 95, 0, 0.15);
-          outline: none;
-        }
-      `}</style>
-
       <div className="max-w-[1440px] mx-auto px-6 py-6">
         {/* Header */}
         <div className="mb-5">
@@ -273,17 +249,17 @@ export default function InventarioPage() {
             <div>
               <div
                 className="text-[11px] font-bold uppercase tracking-[0.05em] mb-1"
-                style={{ color: TOKENS.slate500 }}
+                style={{ color: T.slate500 }}
               >
                 Operaciones / Catálogo
               </div>
               <h1
                 className="text-[24px] font-bold leading-8 tracking-[-0.02em]"
-                style={{ color: TOKENS.charcoal }}
+                style={{ color: T.headline }}
               >
                 Módulo de Inventario
               </h1>
-              <p className="text-[13px] mt-1" style={{ color: TOKENS.slate500 }}>
+              <p className="text-[13px] mt-1" style={{ color: T.slate500 }}>
                 Gestiona tus productos, stock y movimientos de inventario.
               </p>
             </div>
@@ -294,9 +270,9 @@ export default function InventarioPage() {
                 href="/inventario/movimientos"
                 className="inline-flex items-center gap-2 px-3 h-9 text-[13px] font-semibold rounded transition-colors"
                 style={{
-                  color: TOKENS.charcoal,
-                  border: `1px solid ${TOKENS.slate300}`,
-                  background: TOKENS.surface,
+                  color: T.charcoal,
+                  border: `1px solid ${T.slate300}`,
+                  background: T.surface,
                 }}
               >
                 <History className="h-4 w-4" />
@@ -307,9 +283,9 @@ export default function InventarioPage() {
                 onClick={() => setIsImportModalOpen(true)}
                 className="inline-flex items-center gap-2 px-3 h-9 text-[13px] font-semibold rounded transition-colors"
                 style={{
-                  color: TOKENS.charcoal,
-                  border: `1px solid ${TOKENS.slate300}`,
-                  background: TOKENS.surface,
+                  color: T.charcoal,
+                  border: `1px solid ${T.slate300}`,
+                  background: T.surface,
                 }}
               >
                 <Upload className="h-4 w-4" />
@@ -325,14 +301,14 @@ export default function InventarioPage() {
                 className="inline-flex items-center gap-2 px-4 h-9 text-[13px] font-bold rounded transition-colors"
                 style={{
                   color: '#fff',
-                  background: TOKENS.orange,
-                  boxShadow: '0 1px 2px rgba(18, 24, 38, 0.08)',
+                  background: T.orange,
+                  boxShadow: `0 1px 2px ${T.shadowSoft}`,
                 }}
                 onMouseEnter={(e) =>
-                  ((e.currentTarget as HTMLButtonElement).style.background = TOKENS.orangeDark)
+                  ((e.currentTarget as HTMLButtonElement).style.background = T.orangeDark)
                 }
                 onMouseLeave={(e) =>
-                  ((e.currentTarget as HTMLButtonElement).style.background = TOKENS.orange)
+                  ((e.currentTarget as HTMLButtonElement).style.background = T.orange)
                 }
               >
                 <Plus className="h-4 w-4" />
@@ -371,11 +347,11 @@ export default function InventarioPage() {
           {/* Search */}
           <div
             className="bg-white rounded p-3"
-            style={{ border: `1px solid ${TOKENS.slate200}` }}
+            style={{ border: `1px solid ${T.slate200}` }}
           >
             <label
               className="block text-[11px] font-bold uppercase tracking-[0.05em] mb-1.5"
-              style={{ color: TOKENS.slate500 }}
+              style={{ color: T.slate500 }}
             >
               Buscar
             </label>
@@ -392,24 +368,24 @@ export default function InventarioPage() {
         <div
           className="bg-white rounded overflow-hidden"
           style={{
-            border: `1px solid ${TOKENS.slate200}`,
-            boxShadow: '0 1px 2px rgba(18, 24, 38, 0.04)',
+            border: `1px solid ${T.slate200}`,
+            boxShadow: `0 1px 2px ${T.shadowSoft}`,
           }}
         >
           <div
             className="flex items-center justify-between px-4 py-2.5"
-            style={{ borderBottom: `1px solid ${TOKENS.slate200}`, background: TOKENS.slate50 }}
+            style={{ borderBottom: `1px solid ${T.slate200}`, background: T.slate50 }}
           >
             <div className="flex items-center gap-2">
-              <Package className="h-4 w-4" style={{ color: TOKENS.slate500 }} />
+              <Package className="h-4 w-4" style={{ color: T.slate500 }} />
               <span
                 className="text-[11px] font-bold uppercase tracking-[0.05em]"
-                style={{ color: TOKENS.slate700 }}
+                style={{ color: T.slate700 }}
               >
                 Catálogo de productos
               </span>
             </div>
-            <span className="text-[12px] pm-tnum" style={{ color: TOKENS.slate500 }}>
+            <span className="text-[12px] pm-tnum" style={{ color: T.slate500 }}>
               {products ? `${products.length} filas` : 'Cargando…'}
             </span>
           </div>
@@ -417,7 +393,7 @@ export default function InventarioPage() {
           <div className="overflow-x-auto">
             <table className="min-w-full text-[13px]">
               <thead className="sticky top-0 z-10">
-                <tr style={{ background: TOKENS.slate100 }}>
+                <tr style={{ background: T.slate100 }}>
                   <Th>SKU</Th>
                   <Th>Producto</Th>
                   <Th align="right">Stock</Th>
@@ -438,9 +414,9 @@ export default function InventarioPage() {
                       <tr
                         key={item.sku}
                         className="transition-colors"
-                        style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+                        style={{ borderTop: `1px solid ${T.slate200}` }}
                         onMouseEnter={(e) =>
-                          (e.currentTarget.style.background = 'rgba(18, 24, 38, 0.025)')
+                          (e.currentTarget.style.background = T.shadowRow)
                         }
                         onMouseLeave={(e) => (e.currentTarget.style.background = '')}
                       >
@@ -448,8 +424,8 @@ export default function InventarioPage() {
                           <span
                             className="font-mono text-[12px] px-1.5 py-0.5 rounded"
                             style={{
-                              background: TOKENS.slate100,
-                              color: TOKENS.charcoal,
+                              background: T.slate100,
+                              color: T.charcoal,
                             }}
                           >
                             {item.sku}
@@ -458,7 +434,7 @@ export default function InventarioPage() {
                         <Td>
                           <div
                             className="font-semibold leading-tight"
-                            style={{ color: TOKENS.charcoal }}
+                            style={{ color: T.charcoal }}
                           >
                             {item.name}
                           </div>
@@ -467,8 +443,8 @@ export default function InventarioPage() {
                               <span
                                 className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
                                 style={{
-                                  background: TOKENS.slate100,
-                                  color: TOKENS.slate500,
+                                  background: T.slate100,
+                                  color: T.slate500,
                                 }}
                               >
                                 {item.category}
@@ -478,7 +454,7 @@ export default function InventarioPage() {
                           {item.description && (
                             <div
                               className="text-[12px] mt-1 max-w-xs truncate"
-                              style={{ color: TOKENS.slate500 }}
+                              style={{ color: T.slate500 }}
                             >
                               {item.description}
                             </div>
@@ -490,10 +466,10 @@ export default function InventarioPage() {
                               className="pm-tnum font-bold"
                               style={{
                                 color: isOut
-                                  ? TOKENS.red
+                                  ? T.red
                                   : isLow
-                                  ? TOKENS.amber
-                                  : TOKENS.charcoal,
+                                  ? T.amber
+                                  : T.charcoal,
                               }}
                             >
                               {item.stockQuantity}
@@ -501,7 +477,7 @@ export default function InventarioPage() {
                             {isOut && (
                               <span
                                 className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                                style={{ background: TOKENS.redSoft, color: TOKENS.red }}
+                                style={{ background: T.redSoft, color: T.red }}
                               >
                                 Agotado
                               </span>
@@ -509,7 +485,7 @@ export default function InventarioPage() {
                             {isLow && !isOut && (
                               <span
                                 className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                                style={{ background: TOKENS.amberSoft, color: TOKENS.amber }}
+                                style={{ background: T.amberSoft, color: T.amber }}
                               >
                                 Bajo
                               </span>
@@ -517,20 +493,20 @@ export default function InventarioPage() {
                           </div>
                         </Td>
                         <Td align="right">
-                          <span className="pm-tnum" style={{ color: TOKENS.slate700 }}>
+                          <span className="pm-tnum" style={{ color: T.slate700 }}>
                             {item.costUsd != null ? `$${item.costUsd.toFixed(2)}` : '—'}
                           </span>
                         </Td>
                         <Td align="right">
                           <span
                             className="pm-tnum font-bold"
-                            style={{ color: TOKENS.charcoal }}
+                            style={{ color: T.charcoal }}
                           >
                             ${item.priceUsd.toFixed(2)}
                           </span>
                         </Td>
                         <Td>
-                          <span style={{ color: TOKENS.slate700 }}>{item.supplier || '—'}</span>
+                          <span style={{ color: T.slate700 }}>{item.supplier || '—'}</span>
                         </Td>
                         <Td>{getSyncStatusBadge(item.syncStatus)}</Td>
                         <Td align="right">
@@ -538,10 +514,10 @@ export default function InventarioPage() {
                             <button
                               onClick={() => toggleDropdown(item.sku)}
                               className="inline-flex items-center justify-center h-8 w-8 rounded transition-colors"
-                              style={{ color: TOKENS.slate500 }}
+                              style={{ color: T.slate500 }}
                               onMouseEnter={(e) =>
                                 ((e.currentTarget as HTMLButtonElement).style.background =
-                                  TOKENS.slate100)
+                                  T.slate100)
                               }
                               onMouseLeave={(e) =>
                                 ((e.currentTarget as HTMLButtonElement).style.background = '')
@@ -554,9 +530,9 @@ export default function InventarioPage() {
                               <div
                                 className="absolute right-0 mt-1 w-52 rounded z-50 overflow-hidden"
                                 style={{
-                                  background: '#fff',
-                                  border: `1px solid ${TOKENS.slate200}`,
-                                  boxShadow: '0 8px 24px rgba(18, 24, 38, 0.12)',
+                                  background: T.surface,
+                                  border: `1px solid ${T.slate200}`,
+                                  boxShadow: `0 8px 24px ${T.shadowStrong}`,
                                 }}
                               >
                                 <DropdownItem
@@ -578,7 +554,7 @@ export default function InventarioPage() {
                                   Duplicar
                                 </DropdownItem>
                                 <div
-                                  style={{ borderTop: `1px solid ${TOKENS.slate200}` }}
+                                  style={{ borderTop: `1px solid ${T.slate200}` }}
                                 />
                                 <DropdownItem
                                   icon={<Trash2 className="h-4 w-4" />}
@@ -599,9 +575,9 @@ export default function InventarioPage() {
                     <td colSpan={8} className="text-center py-12">
                       <Package
                         className="h-10 w-10 mx-auto mb-3"
-                        style={{ color: TOKENS.slate300 }}
+                        style={{ color: T.slate300 }}
                       />
-                      <p className="text-[13px]" style={{ color: TOKENS.slate500 }}>
+                      <p className="text-[13px]" style={{ color: T.slate500 }}>
                         {products === undefined
                           ? 'Cargando productos…'
                           : 'No hay productos en el inventario.'}
@@ -614,7 +590,7 @@ export default function InventarioPage() {
                             setIsProductModalOpen(true);
                           }}
                           className="mt-4 inline-flex items-center gap-2 px-4 h-9 text-[13px] font-bold rounded"
-                          style={{ background: TOKENS.orange, color: '#fff' }}
+                          style={{ background: T.orange, color: '#fff' }}
                         >
                           <Plus className="h-4 w-4" />
                           Agregar primer producto
@@ -626,17 +602,17 @@ export default function InventarioPage() {
               </tbody>
               {products && products.length > 0 && (
                 <tfoot>
-                  <tr style={{ background: TOKENS.slate50 }}>
+                  <tr style={{ background: T.slate50 }}>
                     <td
                       colSpan={4}
                       className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.05em]"
-                      style={{ color: TOKENS.slate500, borderTop: `1px solid ${TOKENS.slate200}` }}
+                      style={{ color: T.slate500, borderTop: `1px solid ${T.slate200}` }}
                     >
                       Total ({products.length})
                     </td>
                     <td
                       className="px-3 py-2 text-right pm-tnum font-bold"
-                      style={{ color: TOKENS.charcoal, borderTop: `1px solid ${TOKENS.slate200}` }}
+                      style={{ color: T.charcoal, borderTop: `1px solid ${T.slate200}` }}
                     >
                       $
                       {products
@@ -646,7 +622,7 @@ export default function InventarioPage() {
                     <td
                       colSpan={3}
                       className="px-3 py-2 text-[11px]"
-                      style={{ color: TOKENS.slate500, borderTop: `1px solid ${TOKENS.slate200}` }}
+                      style={{ color: T.slate500, borderTop: `1px solid ${T.slate200}` }}
                     >
                       Valor de inventario
                     </td>
@@ -698,26 +674,26 @@ function KPI({
   muted?: boolean;
 }) {
   const accent =
-    tone === 'danger' ? TOKENS.red : tone === 'warn' ? TOKENS.amber : TOKENS.charcoal;
+    tone === 'danger' ? T.red : tone === 'warn' ? T.amber : T.charcoal;
   return (
     <div
       className="bg-white rounded px-4 py-3"
-      style={{ border: `1px solid ${TOKENS.slate200}` }}
+      style={{ border: `1px solid ${T.slate200}` }}
     >
       <div
         className="text-[11px] font-bold uppercase tracking-[0.05em]"
-        style={{ color: TOKENS.slate500 }}
+        style={{ color: T.slate500 }}
       >
         {label}
       </div>
       <div
         className="pm-tnum text-[24px] font-bold leading-8 tracking-[-0.02em] mt-1"
-        style={{ color: muted ? TOKENS.slate400 : accent }}
+        style={{ color: muted ? T.slate400 : accent }}
       >
         {value}
       </div>
       {hint && (
-        <div className="text-[12px] mt-0.5" style={{ color: TOKENS.slate500 }}>
+        <div className="text-[12px] mt-0.5" style={{ color: T.slate500 }}>
           {hint}
         </div>
       )}
@@ -736,8 +712,8 @@ function Th({
     <th
       className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.05em] select-none"
       style={{
-        color: TOKENS.slate700,
-        borderBottom: `1px solid ${TOKENS.slate200}`,
+        color: T.slate700,
+        borderBottom: `1px solid ${T.slate200}`,
         textAlign: align,
       }}
     >
@@ -756,7 +732,7 @@ function Td({
   return (
     <td
       className="px-3 py-2 align-middle"
-      style={{ textAlign: align, color: TOKENS.charcoal }}
+      style={{ textAlign: align, color: T.charcoal }}
     >
       {children}
     </td>
@@ -778,11 +754,11 @@ function DropdownItem({
     <button
       onClick={onClick}
       className="flex items-center gap-2 w-full px-3 py-2 text-[13px] transition-colors"
-      style={{ color: danger ? TOKENS.red : TOKENS.charcoal, background: 'transparent' }}
+      style={{ color: danger ? T.red : T.charcoal, background: 'transparent' }}
       onMouseEnter={(e) =>
         ((e.currentTarget as HTMLButtonElement).style.background = danger
-          ? TOKENS.redSoft
-          : TOKENS.slate100)
+          ? T.redSoft
+          : T.slate100)
       }
       onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')}
     >
